@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+./gradlew formatCheck check
+npm run commitlint -- --help >/dev/null

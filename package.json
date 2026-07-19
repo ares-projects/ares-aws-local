@@ -1,0 +1,10 @@
+{
+  "name": "ares-aws-local-tooling",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1"
+  },
+  "scripts": { "commitlint": "commitlint" }
+}

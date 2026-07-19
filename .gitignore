@@ -1,0 +1,17 @@
+.gradle/
+.kotlin/
+build/
+**/build/
+.idea/
+*.iml
+.vscode/
+node_modules/
+npm-debug.log*
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+*.nar
+*.log
+hs_err_pid*
+replay_pid*
