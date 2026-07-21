@@ -169,7 +169,8 @@ Implementation should be split into focused GitHub issues and pull requests link
 
 1. Bootstrap the HTTP server and request context
    ([PR #3](https://github.com/ares-projects/ares-aws-local/pull/3)).
-2. Define the service registry and adapter contract.
+2. Define the service registry and adapter contract
+   ([PR #5](https://github.com/ares-projects/ares-aws-local/pull/5)).
 3. Implement protocol dispatch for the first supported service.
 4. Implement resource state and reset/isolation behavior.
 5. Implement services through focused issues and pull requests. Create a
@@ -192,3 +193,5 @@ remain open until the first service is selected.
 - Implementation issues and pull requests: to be linked as work is planned.
 - HTTP server and request context bootstrap: [PR #3 — Bootstrap architecture docs and
   local HTTP runtime](https://github.com/ares-projects/ares-aws-local/pull/3).
+- Service registry and adapter contract: [PR #5 — Add service registry and adapter
+  contract](https://github.com/ares-projects/ares-aws-local/pull/5).
