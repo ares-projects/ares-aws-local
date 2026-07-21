@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -60,15 +59,15 @@ class LocalAwsRuntimeTest {
     }
 
     @Test
-    void defaultHandlerDescribesTheCurrentCapabilityBoundary() {
-        AwsHttpResponse response = LocalAwsRuntime.defaultHandler()
-                .handle(null)
+    void defaultRegistryDescribesTheCurrentCapabilityBoundary() {
+        var response = LocalAwsRuntime.defaultRegistry()
+                .handle(mock(io.github.aresprojects.local.runtime.http.AwsRequestContext.class))
                 .toCompletableFuture()
                 .join();
 
-        assertEquals(501, response.statusCode());
+        assertEquals(404, response.statusCode());
         assertEquals(
-                "{\"error\":\"AWS service emulation is not implemented\"}",
+                "{\"error\":\"no AWS service adapter matched request\"}",
                 new String(response.body(), StandardCharsets.UTF_8));
     }
 

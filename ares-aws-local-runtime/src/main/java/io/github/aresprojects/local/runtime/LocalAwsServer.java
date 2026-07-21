@@ -1,7 +1,7 @@
 package io.github.aresprojects.local.runtime;
 
-import io.github.aresprojects.local.runtime.http.AwsRequestHandler;
 import io.github.aresprojects.local.runtime.http.netty.NettyAwsHttpServer;
+import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 
@@ -11,9 +11,10 @@ public final class LocalAwsServer implements AutoCloseable {
     private State state = State.NEW;
     private InetSocketAddress localAddress;
 
-    /** Creates a lifecycle owner with immutable configuration and an asynchronous handler. */
-    public LocalAwsServer(LocalAwsServerConfig config, AwsRequestHandler handler) {
-        delegate = new NettyAwsHttpServer(Objects.requireNonNull(config), Objects.requireNonNull(handler));
+    /** Creates a lifecycle owner with immutable configuration and a startup-built service registry. */
+    public LocalAwsServer(LocalAwsServerConfig config, AwsServiceRegistry registry) {
+        delegate = new NettyAwsHttpServer(
+                Objects.requireNonNull(config, "config"), Objects.requireNonNull(registry, "registry"));
     }
 
     /** Binds before returning so callers can publish the actual endpoint, including an ephemeral port. */

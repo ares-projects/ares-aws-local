@@ -1,8 +1,7 @@
 package io.github.aresprojects.local.runtime;
 
-import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
+import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import java.net.InetSocketAddress;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -18,7 +17,7 @@ public final class LocalAwsRuntime {
         LocalAwsServerConfig config = LocalAwsServerConfig.fromEnvironment(System.getenv());
         run(
                 config,
-                () -> new LocalAwsServer(config, defaultHandler()),
+                () -> new LocalAwsServer(config, defaultRegistry()),
                 Runtime.getRuntime()::addShutdownHook,
                 new CountDownLatch(1),
                 address -> LOGGER.log(System.Logger.Level.INFO, "Ares AWS Local listening on {0}", address));
@@ -40,8 +39,7 @@ public final class LocalAwsRuntime {
         }
     }
 
-    static io.github.aresprojects.local.runtime.http.AwsRequestHandler defaultHandler() {
-        return request -> CompletableFuture.completedFuture(
-                AwsHttpResponse.json(501, "{\"error\":\"AWS service emulation is not implemented\"}"));
+    static AwsServiceRegistry defaultRegistry() {
+        return AwsServiceRegistry.builder().build();
     }
 }
