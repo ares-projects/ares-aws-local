@@ -26,6 +26,6 @@ The listener can be configured with environment variables:
 - `ARES_AWS_LOCAL_PORT` (default: `4566`; use `0` to let the operating system choose a port)
 - `ARES_AWS_LOCAL_MAX_REQUEST_BYTES` (default: `16777216`)
 
-The runtime exposes `GET /_ares/health`, returning a small JSON health response. Other
-requests currently return `501 Not Implemented`; service protocol decoding and service
-emulation will be added in subsequent architecture decisions.
+The runtime exposes `GET /_ares/health`, returning a small JSON health response. The first
+service slice supports SQS `CreateQueue` and `SendMessage` through AWS JSON 1.0. AWS
+Query/XML support and authentication validation remain future work.

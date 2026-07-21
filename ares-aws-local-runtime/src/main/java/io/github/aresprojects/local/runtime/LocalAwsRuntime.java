@@ -1,6 +1,8 @@
 package io.github.aresprojects.local.runtime;
 
 import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
+import io.github.aresprojects.local.runtime.service.sqs.InMemorySqsQueueStore;
+import io.github.aresprojects.local.runtime.service.sqs.SqsJsonAdapter;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -40,6 +42,8 @@ public final class LocalAwsRuntime {
     }
 
     static AwsServiceRegistry defaultRegistry() {
-        return AwsServiceRegistry.builder().build();
+        return AwsServiceRegistry.builder()
+                .register(new SqsJsonAdapter(new InMemorySqsQueueStore()))
+                .build();
     }
 }

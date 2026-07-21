@@ -8,20 +8,20 @@ import java.util.concurrent.CompletionStage;
  * Defines the protocol-aware boundary for one local AWS service implementation.
  *
  * <p>An adapter claims requests in the wire format it understands, then translates the request and response at
- * this boundary. For example, a future SQS Query adapter could look like this:
+ * this boundary. For example, the current SQS AWS JSON adapter follows this shape:
  *
  * <pre>{@code
- * final class SqsQueryAdapter implements AwsServiceAdapter {
+ * final class SqsJsonAdapter implements AwsServiceAdapter {
  *     public String serviceName() {
  *         return "sqs";
  *     }
  *
  *     public boolean supports(AwsRequestContext request) {
- *         return request.rawTarget().contains("Action=");
+ *         return jsonProtocol.supports(request);
  *     }
  *
  *     public CompletionStage<AwsHttpResponse> handle(AwsRequestContext request) {
- *         return sqsService.handleQuery(request);
+ *         return sqsService.handleJson(request);
  *     }
  * }
  * }</pre>
