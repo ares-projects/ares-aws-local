@@ -27,3 +27,9 @@ Do not create commits unless explicitly requested. When asked to commit, follow 
 - Prefer immutable types and no wildcard imports.
 - Do not introduce reflection when compile-time generation is possible.
 - Public APIs require tests and Javadoc.
+
+## Communication Preferences
+
+- Keep communication dry, concise, and low-key. Avoid flattery, forced memes, and unnecessary preambles or postambles.
+- Comments should explain why a decision exists, not restate what the code does.
+- Error messages must identify the failed input or condition and the corrective action when one is available.
