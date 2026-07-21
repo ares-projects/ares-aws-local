@@ -167,7 +167,8 @@ implementation decision before they are treated as stable behavior.
 
 Implementation should be split into focused GitHub issues and pull requests linked to this ADR:
 
-1. Bootstrap the HTTP server and request context.
+1. Bootstrap the HTTP server and request context
+   ([PR #3](https://github.com/ares-projects/ares-aws-local/pull/3)).
 2. Define the service registry and adapter contract.
 3. Implement protocol dispatch for the first supported service.
 4. Implement resource state and reset/isolation behavior.
@@ -189,3 +190,5 @@ remain open until the first service is selected.
 
 - Initiative issue: to be created.
 - Implementation issues and pull requests: to be linked as work is planned.
+- HTTP server and request context bootstrap: [PR #3 — Bootstrap architecture docs and
+  local HTTP runtime](https://github.com/ares-projects/ares-aws-local/pull/3).
