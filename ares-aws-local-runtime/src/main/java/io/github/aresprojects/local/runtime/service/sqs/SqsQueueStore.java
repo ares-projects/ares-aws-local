@@ -15,6 +15,14 @@ public interface SqsQueueStore {
     SqsQueue createQueue(String queueName, String queueUrl);
 
     /**
+     * Finds a queue by its URL.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @return the queue, or empty when it does not exist
+     */
+    Optional<SqsQueue> findQueue(String queueUrl);
+
+    /**
      * Appends a message to an existing queue.
      *
      * @param queueUrl the case-sensitive queue URL
@@ -22,4 +30,21 @@ public interface SqsQueueStore {
      * @return the stored message, or empty when the queue does not exist
      */
     Optional<SqsMessage> sendMessage(String queueUrl, String body);
+
+    /**
+     * Returns the next available message and a receipt handle.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @return a received message, or empty when the queue has no messages
+     */
+    Optional<SqsReceivedMessage> receiveMessage(String queueUrl);
+
+    /**
+     * Deletes the message identified by a receipt handle.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @param receiptHandle the receipt handle returned by receiveMessage
+     * @return whether a message was deleted
+     */
+    boolean deleteMessage(String queueUrl, String receiptHandle);
 }

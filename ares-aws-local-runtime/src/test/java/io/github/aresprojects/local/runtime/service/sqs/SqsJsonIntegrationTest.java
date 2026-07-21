@@ -20,6 +20,8 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 class SqsJsonIntegrationTest {
@@ -47,6 +49,28 @@ class SqsJsonIntegrationTest {
             assertEquals(
                     "5d41402abc4b2a76b9719d911017c592",
                     MAPPER.readTree(sent.body()).get("MD5OfMessageBody").textValue());
+
+            HttpResponse<String> received = sendJson(
+                    endpoint, "AmazonSQS.ReceiveMessage", MAPPER.writeValueAsString(Map.of("QueueUrl", queueUrl)));
+            String receiptHandle = MAPPER.readTree(received.body())
+                    .get("Messages")
+                    .get(0)
+                    .get("ReceiptHandle")
+                    .textValue();
+            HttpResponse<String> deleted = sendJson(
+                    endpoint,
+                    "AmazonSQS.DeleteMessage",
+                    MAPPER.writeValueAsString(Map.of("QueueUrl", queueUrl, "ReceiptHandle", receiptHandle)));
+
+            assertEquals(200, received.statusCode());
+            assertEquals(
+                    "hello",
+                    MAPPER.readTree(received.body())
+                            .get("Messages")
+                            .get(0)
+                            .get("Body")
+                            .textValue());
+            assertEquals(200, deleted.statusCode());
         }
     }
 
@@ -69,10 +93,18 @@ class SqsJsonIntegrationTest {
                         .queueUrl(queueUrl)
                         .messageBody("hello from sdk v2")
                         .build());
+                var received = client.receiveMessage(
+                        ReceiveMessageRequest.builder().queueUrl(queueUrl).build());
+                var message = received.messages().getFirst();
+                client.deleteMessage(DeleteMessageRequest.builder()
+                        .queueUrl(queueUrl)
+                        .receiptHandle(message.receiptHandle())
+                        .build());
 
                 assertFalse(queueUrl.isBlank());
                 assertEquals("aab3c23d87dbc0b72e6c5ff268c9f011", response.md5OfMessageBody());
                 assertFalse(response.messageId().isBlank());
+                assertEquals("hello from sdk v2", message.body());
             }
         }
     }

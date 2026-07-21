@@ -21,6 +21,8 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
     private static final String AWS_ACCOUNT_ID = "000000000000";
     private static final Set<String> CREATE_QUEUE_FIELDS = Set.of("QueueName");
     private static final Set<String> SEND_MESSAGE_FIELDS = Set.of("QueueUrl", "MessageBody");
+    private static final Set<String> RECEIVE_MESSAGE_FIELDS = Set.of("QueueUrl");
+    private static final Set<String> DELETE_MESSAGE_FIELDS = Set.of("QueueUrl", "ReceiptHandle");
 
     private final SqsQueueStore store;
     private final AwsJsonProtocol protocol;
@@ -65,6 +67,8 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
         return switch (decoded.operationName()) {
             case "CreateQueue" -> createQueue(request, decoded.payload());
             case "SendMessage" -> sendMessage(request, decoded.payload());
+            case "ReceiveMessage" -> receiveMessage(request, decoded.payload());
+            case "DeleteMessage" -> deleteMessage(request, decoded.payload());
             default ->
                 protocol.error(
                         request,
@@ -89,6 +93,31 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
         SqsMessage message = new SqsSendMessageCommand(queueUrl, messageBody).execute(store);
         return protocol.success(
                 request, Map.of("MD5OfMessageBody", message.md5OfMessageBody(), "MessageId", message.messageId()));
+    }
+
+    private AwsHttpResponse receiveMessage(AwsRequestContext request, JsonNode payload) {
+        rejectUnexpectedFields(payload, RECEIVE_MESSAGE_FIELDS);
+        String queueUrl = requiredText(payload, "QueueUrl");
+        SqsReceivedMessage received =
+                new SqsReceiveMessageCommand(queueUrl).execute(store).orElse(null);
+        if (received == null) {
+            return protocol.success(request, Map.of("Messages", java.util.List.of()));
+        }
+        SqsMessage message = received.message();
+        Map<String, String> responseMessage = Map.of(
+                "MessageId", message.messageId(),
+                "ReceiptHandle", received.receiptHandle(),
+                "MD5OfBody", message.md5OfMessageBody(),
+                "Body", message.body());
+        return protocol.success(request, Map.of("Messages", java.util.List.of(responseMessage)));
+    }
+
+    private AwsHttpResponse deleteMessage(AwsRequestContext request, JsonNode payload) {
+        rejectUnexpectedFields(payload, DELETE_MESSAGE_FIELDS);
+        String queueUrl = requiredText(payload, "QueueUrl");
+        String receiptHandle = requiredText(payload, "ReceiptHandle");
+        new SqsDeleteMessageCommand(queueUrl, receiptHandle).execute(store);
+        return protocol.success(request, Map.of());
     }
 
     private static String requiredText(JsonNode payload, String fieldName) {

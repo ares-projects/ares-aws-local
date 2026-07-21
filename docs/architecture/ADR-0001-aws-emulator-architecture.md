@@ -93,10 +93,12 @@ service request and encoding a service result into the expected AWS response for
 should preserve service-specific details that affect error responses, headers, or
 operation selection.
 
-The first service slice supports SQS `CreateQueue` and `SendMessage` through AWS JSON 1.0.
-AWS Query/XML compatibility and SigV4 authentication validation remain future work. The
-implementation must reject unsupported fields explicitly rather than silently inventing
-behavior.
+The first service slice supports SQS `CreateQueue`, `SendMessage`, `ReceiveMessage`, and
+`DeleteMessage` through AWS JSON 1.0. Queue state is process-local, and the current read
+path keeps messages available until explicit deletion; visibility timeouts and long polling
+remain future work. AWS Query/XML compatibility and SigV4 authentication validation also
+remain future work. The implementation must reject unsupported fields explicitly rather
+than silently inventing behavior.
 
 ### Service registry and adapters
 

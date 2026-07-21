@@ -21,6 +21,11 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
     }
 
     @Override
+    public Optional<SqsQueue> findQueue(String queueUrl) {
+        return Optional.ofNullable(queues.get(queueUrl)).map(QueueState::queue);
+    }
+
+    @Override
     public Optional<SqsMessage> sendMessage(String queueUrl, String body) {
         QueueState queue = queues.get(queueUrl);
         if (queue == null) {
@@ -29,6 +34,36 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
         SqsMessage message = new SqsMessage(UUID.randomUUID().toString(), body, md5(body));
         queue.messages().add(message);
         return Optional.of(message);
+    }
+
+    @Override
+    public Optional<SqsReceivedMessage> receiveMessage(String queueUrl) {
+        QueueState queue = queues.get(queueUrl);
+        if (queue == null) {
+            return Optional.empty();
+        }
+        SqsMessage message = queue.messages().peek();
+        if (message == null) {
+            return Optional.empty();
+        }
+        String receiptHandle = UUID.randomUUID().toString();
+        queue.receipts().put(receiptHandle, message);
+        return Optional.of(new SqsReceivedMessage(message, receiptHandle));
+    }
+
+    @Override
+    public boolean deleteMessage(String queueUrl, String receiptHandle) {
+        QueueState queue = queues.get(queueUrl);
+        if (queue == null) {
+            return false;
+        }
+        SqsMessage message = queue.receipts().remove(receiptHandle);
+        if (message == null) {
+            return false;
+        }
+        queue.messages().remove(message);
+        queue.receipts().values().removeIf(received -> received.equals(message));
+        return true;
     }
 
     private static String md5(String body) {
@@ -44,9 +79,9 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
         }
     }
 
-    private record QueueState(SqsQueue queue, Queue<SqsMessage> messages) {
+    private record QueueState(SqsQueue queue, Queue<SqsMessage> messages, ConcurrentMap<String, SqsMessage> receipts) {
         private QueueState(SqsQueue queue) {
-            this(queue, new ConcurrentLinkedQueue<>());
+            this(queue, new ConcurrentLinkedQueue<>(), new ConcurrentHashMap<>());
         }
     }
 }
