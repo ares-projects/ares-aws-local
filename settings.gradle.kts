@@ -12,3 +12,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ares-aws-local"
 includeBuild("build-logic")
+include("ares-aws-local-runtime")
