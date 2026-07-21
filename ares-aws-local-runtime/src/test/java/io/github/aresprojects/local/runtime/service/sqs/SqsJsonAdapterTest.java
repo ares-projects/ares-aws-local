@@ -54,6 +54,38 @@ class SqsJsonAdapterTest {
     }
 
     @Test
+    void receivesAndDeletesMessages() throws Exception {
+        SqsJsonAdapter adapter = new SqsJsonAdapter(new InMemorySqsQueueStore());
+        String queueUrl = body(adapter.handle(request("CreateQueue", "{\"QueueName\":\"orders\"}"))
+                        .toCompletableFuture()
+                        .join())
+                .get("QueueUrl")
+                .textValue();
+        adapter.handle(request("SendMessage", "{\"QueueUrl\":\"" + queueUrl + "\",\"MessageBody\":\"hello\"}"))
+                .toCompletableFuture()
+                .join();
+
+        JsonNode received = body(adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"" + queueUrl + "\"}"))
+                .toCompletableFuture()
+                .join());
+        JsonNode message = received.get("Messages").get(0);
+        var deleted = adapter.handle(request(
+                        "DeleteMessage",
+                        "{\"QueueUrl\":\"" + queueUrl + "\",\"ReceiptHandle\":\""
+                                + message.get("ReceiptHandle").textValue() + "\"}"))
+                .toCompletableFuture()
+                .join();
+        JsonNode empty = body(adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"" + queueUrl + "\"}"))
+                .toCompletableFuture()
+                .join());
+
+        assertEquals("hello", message.get("Body").textValue());
+        assertFalse(message.get("MD5OfBody").textValue().isBlank());
+        assertEquals(200, deleted.statusCode());
+        assertTrue(empty.get("Messages").isEmpty());
+    }
+
+    @Test
     void returnsAwsShapedErrors() throws Exception {
         SqsJsonAdapter adapter = new SqsJsonAdapter(new InMemorySqsQueueStore());
 
@@ -87,9 +119,14 @@ class SqsJsonAdapterTest {
         var unknownOperation = adapter.handle(request("DeleteQueue", "{}"))
                 .toCompletableFuture()
                 .join();
+        var unsupportedReceiveField = adapter.handle(
+                        request("ReceiveMessage", "{\"QueueUrl\":\"url\",\"MaxNumberOfMessages\":10}"))
+                .toCompletableFuture()
+                .join();
 
         assertEquals("UnsupportedOperation", errorCode(unsupportedSendField));
         assertEquals("UnsupportedOperation", errorCode(unknownOperation));
+        assertEquals("UnsupportedOperation", errorCode(unsupportedReceiveField));
     }
 
     @Test
@@ -153,6 +190,23 @@ class SqsJsonAdapterTest {
 
         assertEquals("InvalidRequest", errorCode(malformed));
         assertEquals("http://127.0.0.1:4566/000000000000/fallback", queue);
+    }
+
+    @Test
+    void rejectsMissingQueuesAndInvalidReceiptHandles() throws Exception {
+        SqsJsonAdapter adapter = new SqsJsonAdapter(new InMemorySqsQueueStore());
+        String queueUrl = "http://127.0.0.1:4566/000000000000/missing";
+
+        var missingQueue = adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"" + queueUrl + "\"}"))
+                .toCompletableFuture()
+                .join();
+        var invalidHandle = adapter.handle(
+                        request("DeleteMessage", "{\"QueueUrl\":\"" + queueUrl + "\",\"ReceiptHandle\":\"missing\"}"))
+                .toCompletableFuture()
+                .join();
+
+        assertEquals("QueueDoesNotExist", errorCode(missingQueue));
+        assertEquals("QueueDoesNotExist", errorCode(invalidHandle));
     }
 
     @Test

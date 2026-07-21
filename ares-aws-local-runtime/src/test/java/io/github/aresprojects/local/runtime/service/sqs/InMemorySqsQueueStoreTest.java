@@ -31,4 +31,29 @@ class InMemorySqsQueueStoreTest {
 
         assertFalse(message.isPresent());
     }
+
+    @Test
+    void receivesMessagesWithReceiptHandlesAndDeletesThem() {
+        InMemorySqsQueueStore store = new InMemorySqsQueueStore();
+        String url = "http://127.0.0.1:4566/000000000000/orders";
+        store.createQueue("orders", url);
+        store.sendMessage(url, "hello");
+
+        SqsReceivedMessage received = store.receiveMessage(url).orElseThrow();
+
+        assertEquals("hello", received.message().body());
+        assertFalse(received.receiptHandle().isBlank());
+        assertTrue(store.deleteMessage(url, received.receiptHandle()));
+        assertTrue(store.receiveMessage(url).isEmpty());
+    }
+
+    @Test
+    void rejectsUnknownReceiptHandlesAndQueues() {
+        InMemorySqsQueueStore store = new InMemorySqsQueueStore();
+        String url = "http://127.0.0.1:4566/000000000000/orders";
+
+        assertFalse(store.deleteMessage(url, "missing"));
+        assertTrue(store.findQueue(url).isEmpty());
+        assertTrue(store.receiveMessage(url).isEmpty());
+    }
 }

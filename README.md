@@ -27,5 +27,6 @@ The listener can be configured with environment variables:
 - `ARES_AWS_LOCAL_MAX_REQUEST_BYTES` (default: `16777216`)
 
 The runtime exposes `GET /_ares/health`, returning a small JSON health response. The first
-service slice supports SQS `CreateQueue` and `SendMessage` through AWS JSON 1.0. AWS
-Query/XML support and authentication validation remain future work.
+service slice supports SQS `CreateQueue`, `SendMessage`, `ReceiveMessage`, and
+`DeleteMessage` through AWS JSON 1.0. Visibility timeouts, long polling, AWS Query/XML
+support, and authentication validation remain future work.
