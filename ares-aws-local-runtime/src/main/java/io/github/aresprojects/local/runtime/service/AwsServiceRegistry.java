@@ -17,8 +17,7 @@ import java.util.concurrent.CompletionStage;
  *
  * <pre>{@code
  * AwsServiceRegistry registry = AwsServiceRegistry.builder()
- *         .register(new SqsQueryAdapter())
- *         .register(new SqsJsonAdapter())
+ *         .register(new SqsJsonAdapter(new InMemorySqsQueueStore()))
  *         .build();
  *
  * try (LocalAwsServer server = new LocalAwsServer(config, registry)) {

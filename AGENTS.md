@@ -27,6 +27,9 @@ Do not create commits unless explicitly requested. When asked to commit, follow 
 - Prefer immutable types and no wildcard imports.
 - Do not introduce reflection when compile-time generation is possible.
 - Public APIs require tests and Javadoc.
+- When implementing AWS service behavior, use the authoritative AWS service and protocol
+  documentation as the source of truth. Match documented request, response, and error
+  semantics; reject unsupported behavior explicitly instead of inventing silent fallbacks.
 
 ## Communication Preferences
 

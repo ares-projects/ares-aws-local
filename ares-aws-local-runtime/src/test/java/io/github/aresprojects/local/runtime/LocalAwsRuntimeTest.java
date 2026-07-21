@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -15,6 +16,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -61,7 +64,16 @@ class LocalAwsRuntimeTest {
     @Test
     void defaultRegistryDescribesTheCurrentCapabilityBoundary() {
         var response = LocalAwsRuntime.defaultRegistry()
-                .handle(mock(io.github.aresprojects.local.runtime.http.AwsRequestContext.class))
+                .handle(new AwsRequestContext(
+                        "request-id",
+                        Instant.parse("2026-07-21T00:00:00Z"),
+                        "GET",
+                        "HTTP/1.1",
+                        "/unknown",
+                        Map.of(),
+                        new byte[0],
+                        new InetSocketAddress("127.0.0.1", 1234),
+                        new InetSocketAddress("127.0.0.1", 4566)))
                 .toCompletableFuture()
                 .join();
 
