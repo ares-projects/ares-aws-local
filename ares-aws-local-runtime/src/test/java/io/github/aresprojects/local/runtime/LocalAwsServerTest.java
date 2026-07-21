@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
+import io.github.aresprojects.local.runtime.http.AwsRequestHandler;
+import io.github.aresprojects.local.runtime.service.AwsServiceAdapter;
+import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -27,10 +30,10 @@ class LocalAwsServerTest {
     @Test
     void healthEndpointRespondsWithoutInvokingHandler() throws Exception {
         AtomicReference<AwsRequestContext> handled = new AtomicReference<>();
-        try (LocalAwsServer server = server(request -> {
+        try (LocalAwsServer server = server(adapter("health-test", true, request -> {
             handled.set(request);
             return CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]));
-        })) {
+        }))) {
             InetSocketAddress address = server.start();
             HttpResponse<String> response = send(address, "GET", "/_ares/health", new byte[0]);
 
@@ -46,13 +49,13 @@ class LocalAwsServerTest {
     @Test
     void handlerReceivesRequestContextAndCanRespondAsynchronously() throws Exception {
         AtomicReference<AwsRequestContext> handled = new AtomicReference<>();
-        try (LocalAwsServer server = server(request -> {
+        try (LocalAwsServer server = server(adapter("request-test", true, request -> {
             handled.set(request);
             return CompletableFuture.completedFuture(new AwsHttpResponse(
                     201,
                     java.util.Map.of("x-response", List.of("accepted")),
                     "created".getBytes(StandardCharsets.UTF_8)));
-        })) {
+        }))) {
             HttpResponse<String> response = send(
                     server.start(),
                     "POST",
@@ -76,26 +79,25 @@ class LocalAwsServerTest {
 
     @Test
     void unhandledAndFailedRequestsReturnUsefulStatuses() throws Exception {
-        try (LocalAwsServer server = server(request ->
-                CompletableFuture.completedFuture(AwsHttpResponse.json(501, "{\"error\":\"not implemented\"}")))) {
+        try (LocalAwsServer server = server()) {
             HttpResponse<String> response = send(server.start(), "GET", "/unknown", new byte[0]);
-            assertEquals(501, response.statusCode());
+            assertEquals(404, response.statusCode());
         }
 
-        try (LocalAwsServer server =
-                server(request -> CompletableFuture.failedFuture(new IllegalStateException("boom")))) {
+        try (LocalAwsServer server = server(adapter(
+                "failed", true, request -> CompletableFuture.failedFuture(new IllegalStateException("boom"))))) {
             HttpResponse<String> response = send(server.start(), "GET", "/failure", new byte[0]);
             assertEquals(500, response.statusCode());
         }
 
-        try (LocalAwsServer server = server(request -> {
+        try (LocalAwsServer server = server(adapter("synchronous-failure", true, request -> {
             throw new IllegalStateException("synchronous failure");
-        })) {
+        }))) {
             HttpResponse<String> response = send(server.start(), "GET", "/failure", new byte[0]);
             assertEquals(500, response.statusCode());
         }
 
-        try (LocalAwsServer server = server(request -> null)) {
+        try (LocalAwsServer server = server(adapter("null-response", true, request -> null))) {
             HttpResponse<String> response = send(server.start(), "GET", "/null", new byte[0]);
             assertEquals(500, response.statusCode());
         }
@@ -105,10 +107,14 @@ class LocalAwsServerTest {
     void oversizedRequestsAreRejectedBeforeHandlerInvocation() throws Exception {
         AtomicReference<AwsRequestContext> handled = new AtomicReference<>();
         LocalAwsServerConfig config = new LocalAwsServerConfig("127.0.0.1", 0, 4);
-        try (LocalAwsServer server = new LocalAwsServer(config, request -> {
-            handled.set(request);
-            return CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]));
-        })) {
+        try (LocalAwsServer server = new LocalAwsServer(
+                config,
+                AwsServiceRegistry.builder()
+                        .register(adapter("size-test", true, request -> {
+                            handled.set(request);
+                            return CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]));
+                        }))
+                        .build())) {
             HttpResponse<String> response =
                     send(server.start(), "POST", "/too-large", "12345".getBytes(StandardCharsets.UTF_8));
             assertEquals(413, response.statusCode());
@@ -118,8 +124,10 @@ class LocalAwsServerTest {
 
     @Test
     void malformedRequestsAreRejected() throws Exception {
-        try (LocalAwsServer server =
-                server(request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0])))) {
+        try (LocalAwsServer server = server(adapter(
+                "malformed-test",
+                true,
+                request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]))))) {
             InetSocketAddress address = server.start();
             try (Socket socket = new Socket(address.getAddress(), address.getPort())) {
                 socket.getOutputStream()
@@ -133,8 +141,10 @@ class LocalAwsServerTest {
 
     @Test
     void lifecycleIsExplicitAndCloseIsIdempotent() {
-        LocalAwsServer server =
-                server(request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0])));
+        LocalAwsServer server = server(adapter(
+                "lifecycle-test",
+                true,
+                request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]))));
         assertFalse(server.isRunning());
         assertThrows(IllegalStateException.class, server::localAddress);
 
@@ -142,7 +152,10 @@ class LocalAwsServerTest {
         assertFalse(server.isRunning());
         assertThrows(IllegalStateException.class, server::start);
 
-        server = server(request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0])));
+        server = server(adapter(
+                "lifecycle-test-2",
+                true,
+                request -> CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]))));
         server.start();
         assertTrue(server.isRunning());
         assertNotNull(server.localAddress());
@@ -154,8 +167,31 @@ class LocalAwsServerTest {
         assertThrows(IllegalStateException.class, server::localAddress);
     }
 
-    private static LocalAwsServer server(io.github.aresprojects.local.runtime.http.AwsRequestHandler handler) {
-        return new LocalAwsServer(new LocalAwsServerConfig("127.0.0.1", 0, 1024 * 1024), handler);
+    private static LocalAwsServer server(AwsServiceAdapter... adapters) {
+        AwsServiceRegistry.Builder registry = AwsServiceRegistry.builder();
+        for (AwsServiceAdapter adapter : adapters) {
+            registry.register(adapter);
+        }
+        return new LocalAwsServer(new LocalAwsServerConfig("127.0.0.1", 0, 1024 * 1024), registry.build());
+    }
+
+    private static AwsServiceAdapter adapter(String name, boolean supports, AwsRequestHandler handler) {
+        return new AwsServiceAdapter() {
+            @Override
+            public String serviceName() {
+                return name;
+            }
+
+            @Override
+            public boolean supports(AwsRequestContext request) {
+                return supports;
+            }
+
+            @Override
+            public java.util.concurrent.CompletionStage<AwsHttpResponse> handle(AwsRequestContext request) {
+                return handler.handle(request);
+            }
+        };
     }
 
     private static HttpResponse<String> send(InetSocketAddress address, String method, String path, byte[] body)
