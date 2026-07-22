@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -39,12 +43,13 @@ class InMemorySqsQueueStoreTest {
         store.createQueue("orders", url);
         store.sendMessage(url, "hello");
 
-        SqsReceivedMessage received = store.receiveMessage(url).orElseThrow();
+        SqsReceivedMessage received = store.receiveMessage(url, 30).orElseThrow();
 
         assertEquals("hello", received.message().body());
         assertFalse(received.receiptHandle().isBlank());
+        assertTrue(store.receiveMessage(url, 30).isEmpty());
         assertTrue(store.deleteMessage(url, received.receiptHandle()));
-        assertTrue(store.receiveMessage(url).isEmpty());
+        assertTrue(store.receiveMessage(url, 30).isEmpty());
     }
 
     @Test
@@ -54,6 +59,49 @@ class InMemorySqsQueueStoreTest {
 
         assertFalse(store.deleteMessage(url, "missing"));
         assertTrue(store.findQueue(url).isEmpty());
-        assertTrue(store.receiveMessage(url).isEmpty());
+        assertTrue(store.receiveMessage(url, 30).isEmpty());
+    }
+
+    @Test
+    void makesUnacknowledgedMessagesAvailableAfterVisibilityTimeout() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-22T00:00:00Z"));
+        InMemorySqsQueueStore store = new InMemorySqsQueueStore(clock);
+        String url = "http://127.0.0.1:4566/000000000000/orders";
+        store.createQueue("orders", url);
+        store.sendMessage(url, "hello");
+
+        SqsReceivedMessage first = store.receiveMessage(url, 10).orElseThrow();
+        clock.advance(Duration.ofSeconds(10));
+        SqsReceivedMessage second = store.receiveMessage(url, 10).orElseThrow();
+
+        assertEquals("hello", second.message().body());
+        assertFalse(first.receiptHandle().equals(second.receiptHandle()));
+    }
+
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        private void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

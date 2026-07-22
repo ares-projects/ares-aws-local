@@ -35,9 +35,10 @@ public interface SqsQueueStore {
      * Returns the next available message and a receipt handle.
      *
      * @param queueUrl the case-sensitive queue URL
-     * @return a received message, or empty when the queue has no messages
+     * @param visibilityTimeoutSeconds how long the message remains unavailable
+     * @return a received message, or empty when the queue has no available messages
      */
-    Optional<SqsReceivedMessage> receiveMessage(String queueUrl);
+    Optional<SqsReceivedMessage> receiveMessage(String queueUrl, int visibilityTimeoutSeconds);
 
     /**
      * Deletes the message identified by a receipt handle.

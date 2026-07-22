@@ -2,6 +2,7 @@ package io.github.aresprojects.local.runtime.service.sqs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aresprojects.local.runtime.LocalAwsServer;
@@ -105,6 +106,50 @@ class SqsJsonIntegrationTest {
                 assertEquals("aab3c23d87dbc0b72e6c5ff268c9f011", response.md5OfMessageBody());
                 assertFalse(response.messageId().isBlank());
                 assertEquals("hello from sdk v2", message.body());
+            }
+        }
+    }
+
+    @Test
+    void awsSdkV2CanReceiveAgainAfterImmediateVisibilityTimeout() {
+        try (LocalAwsServer server = server()) {
+            InetSocketAddress address = server.start();
+            URI endpoint = URI.create("http://" + address.getHostString() + ":" + address.getPort());
+            try (SqsClient client = SqsClient.builder()
+                    .endpointOverride(endpoint)
+                    .region(Region.US_EAST_1)
+                    .credentialsProvider(
+                            StaticCredentialsProvider.create(AwsBasicCredentials.create("access-key", "secret-key")))
+                    .build()) {
+                String queueUrl = client.createQueue(CreateQueueRequest.builder()
+                                .queueName("sdk-visibility")
+                                .build())
+                        .queueUrl();
+                client.sendMessage(SendMessageRequest.builder()
+                        .queueUrl(queueUrl)
+                        .messageBody("visibility test")
+                        .build());
+
+                var first = client.receiveMessage(ReceiveMessageRequest.builder()
+                                .queueUrl(queueUrl)
+                                .visibilityTimeout(0)
+                                .build())
+                        .messages()
+                        .getFirst();
+                var visibleAgain = client.receiveMessage(ReceiveMessageRequest.builder()
+                                .queueUrl(queueUrl)
+                                .visibilityTimeout(0)
+                                .build())
+                        .messages()
+                        .getFirst();
+
+                client.deleteMessage(DeleteMessageRequest.builder()
+                        .queueUrl(queueUrl)
+                        .receiptHandle(visibleAgain.receiptHandle())
+                        .build());
+
+                assertEquals(first.messageId(), visibleAgain.messageId());
+                assertNotEquals(first.receiptHandle(), visibleAgain.receiptHandle());
             }
         }
     }

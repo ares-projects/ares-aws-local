@@ -28,5 +28,6 @@ The listener can be configured with environment variables:
 
 The runtime exposes `GET /_ares/health`, returning a small JSON health response. The first
 service slice supports SQS `CreateQueue`, `SendMessage`, `ReceiveMessage`, and
-`DeleteMessage` through AWS JSON 1.0. Visibility timeouts, long polling, AWS Query/XML
-support, and authentication validation remain future work.
+`DeleteMessage` through AWS JSON 1.0. Visibility timeouts are supported for received
+messages; long polling, AWS Query/XML support, and authentication validation remain future
+work.

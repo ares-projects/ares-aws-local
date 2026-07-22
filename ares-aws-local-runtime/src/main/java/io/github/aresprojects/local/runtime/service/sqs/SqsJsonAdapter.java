@@ -21,7 +21,7 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
     private static final String AWS_ACCOUNT_ID = "000000000000";
     private static final Set<String> CREATE_QUEUE_FIELDS = Set.of("QueueName");
     private static final Set<String> SEND_MESSAGE_FIELDS = Set.of("QueueUrl", "MessageBody");
-    private static final Set<String> RECEIVE_MESSAGE_FIELDS = Set.of("QueueUrl");
+    private static final Set<String> RECEIVE_MESSAGE_FIELDS = Set.of("QueueUrl", "VisibilityTimeout");
     private static final Set<String> DELETE_MESSAGE_FIELDS = Set.of("QueueUrl", "ReceiptHandle");
 
     private final SqsQueueStore store;
@@ -98,8 +98,11 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
     private AwsHttpResponse receiveMessage(AwsRequestContext request, JsonNode payload) {
         rejectUnexpectedFields(payload, RECEIVE_MESSAGE_FIELDS);
         String queueUrl = requiredText(payload, "QueueUrl");
-        SqsReceivedMessage received =
-                new SqsReceiveMessageCommand(queueUrl).execute(store).orElse(null);
+        int visibilityTimeout = optionalInteger(
+                payload, "VisibilityTimeout", SqsReceiveMessageCommand.DEFAULT_VISIBILITY_TIMEOUT_SECONDS);
+        SqsReceivedMessage received = new SqsReceiveMessageCommand(queueUrl, visibilityTimeout)
+                .execute(store)
+                .orElse(null);
         if (received == null) {
             return protocol.success(request, Map.of("Messages", java.util.List.of()));
         }
@@ -129,6 +132,17 @@ public final class SqsJsonAdapter implements AwsServiceAdapter {
             throw new SqsServiceException("MissingParameter", "The request must contain parameter " + fieldName);
         }
         return value.textValue();
+    }
+
+    private static int optionalInteger(JsonNode payload, String fieldName, int defaultValue) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!value.canConvertToInt()) {
+            throw new SqsServiceException("InvalidParameterValue", fieldName + " must be an integer");
+        }
+        return value.intValue();
     }
 
     private static void rejectUnexpectedFields(JsonNode payload, Set<String> allowedFields) {
