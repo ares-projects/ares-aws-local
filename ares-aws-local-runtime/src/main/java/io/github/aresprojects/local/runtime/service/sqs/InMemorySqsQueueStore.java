@@ -3,6 +3,10 @@ package io.github.aresprojects.local.runtime.service.sqs;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
@@ -13,6 +17,17 @@ import java.util.concurrent.ConcurrentMap;
 /** Thread-safe process-local SQS state used by the default runtime. */
 public final class InMemorySqsQueueStore implements SqsQueueStore {
     private final ConcurrentMap<String, QueueState> queues = new ConcurrentHashMap<>();
+    private final Clock clock;
+
+    /** Creates a store using the system UTC clock. */
+    public InMemorySqsQueueStore() {
+        this(Clock.systemUTC());
+    }
+
+    /** Creates a store with an injectable clock for deterministic expiration behavior. */
+    public InMemorySqsQueueStore(Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock");
+    }
 
     @Override
     public SqsQueue createQueue(String queueName, String queueUrl) {
@@ -37,17 +52,20 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
     }
 
     @Override
-    public Optional<SqsReceivedMessage> receiveMessage(String queueUrl) {
+    public Optional<SqsReceivedMessage> receiveMessage(String queueUrl, int visibilityTimeoutSeconds) {
         QueueState queue = queues.get(queueUrl);
         if (queue == null) {
             return Optional.empty();
         }
-        SqsMessage message = queue.messages().peek();
+        Instant now = clock.instant();
+        requeueExpired(queue, now);
+        SqsMessage message = queue.messages().poll();
         if (message == null) {
             return Optional.empty();
         }
         String receiptHandle = UUID.randomUUID().toString();
-        queue.receipts().put(receiptHandle, message);
+        queue.receipts()
+                .put(receiptHandle, new ReceiptState(message, now.plus(Duration.ofSeconds(visibilityTimeoutSeconds))));
         return Optional.of(new SqsReceivedMessage(message, receiptHandle));
     }
 
@@ -57,13 +75,21 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
         if (queue == null) {
             return false;
         }
-        SqsMessage message = queue.receipts().remove(receiptHandle);
-        if (message == null) {
+        ReceiptState receipt = queue.receipts().remove(receiptHandle);
+        if (receipt == null) {
             return false;
         }
-        queue.messages().remove(message);
-        queue.receipts().values().removeIf(received -> received.equals(message));
         return true;
+    }
+
+    private static void requeueExpired(QueueState queue, Instant now) {
+        queue.receipts().entrySet().removeIf(entry -> {
+            if (entry.getValue().visibleAt().isAfter(now)) {
+                return false;
+            }
+            queue.messages().add(entry.getValue().message());
+            return true;
+        });
     }
 
     private static String md5(String body) {
@@ -79,9 +105,12 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
         }
     }
 
-    private record QueueState(SqsQueue queue, Queue<SqsMessage> messages, ConcurrentMap<String, SqsMessage> receipts) {
+    private record QueueState(
+            SqsQueue queue, Queue<SqsMessage> messages, ConcurrentMap<String, ReceiptState> receipts) {
         private QueueState(SqsQueue queue) {
             this(queue, new ConcurrentLinkedQueue<>(), new ConcurrentHashMap<>());
         }
     }
+
+    private record ReceiptState(SqsMessage message, Instant visibleAt) {}
 }

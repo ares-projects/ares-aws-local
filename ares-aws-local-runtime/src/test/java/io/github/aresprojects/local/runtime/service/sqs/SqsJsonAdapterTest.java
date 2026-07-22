@@ -65,9 +65,10 @@ class SqsJsonAdapterTest {
                 .toCompletableFuture()
                 .join();
 
-        JsonNode received = body(adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"" + queueUrl + "\"}"))
-                .toCompletableFuture()
-                .join());
+        JsonNode received = body(
+                adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"" + queueUrl + "\",\"VisibilityTimeout\":0}"))
+                        .toCompletableFuture()
+                        .join());
         JsonNode message = received.get("Messages").get(0);
         var deleted = adapter.handle(request(
                         "DeleteMessage",
@@ -207,6 +208,17 @@ class SqsJsonAdapterTest {
 
         assertEquals("QueueDoesNotExist", errorCode(missingQueue));
         assertEquals("QueueDoesNotExist", errorCode(invalidHandle));
+    }
+
+    @Test
+    void rejectsOutOfRangeVisibilityTimeouts() throws Exception {
+        SqsJsonAdapter adapter = new SqsJsonAdapter(new InMemorySqsQueueStore());
+
+        var invalid = adapter.handle(request("ReceiveMessage", "{\"QueueUrl\":\"url\",\"VisibilityTimeout\":43201}"))
+                .toCompletableFuture()
+                .join();
+
+        assertEquals("InvalidParameterValue", errorCode(invalid));
     }
 
     @Test

@@ -37,4 +37,10 @@ class SqsCommandTest {
         assertEquals("hello", message.body());
         assertEquals("5d41402abc4b2a76b9719d911017c592", message.md5OfMessageBody());
     }
+
+    @Test
+    void validatesVisibilityTimeoutRange() {
+        assertThrows(SqsServiceException.class, () -> new SqsReceiveMessageCommand("url", -1));
+        assertThrows(SqsServiceException.class, () -> new SqsReceiveMessageCommand("url", 43_201));
+    }
 }
