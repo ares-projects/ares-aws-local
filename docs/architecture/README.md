@@ -50,3 +50,4 @@ Issues describe the work to do. ADRs describe the architectural reasoning behind
 ## Current ADRs
 
 - [ADR-0001: AWS emulator architecture](./ADR-0001-aws-emulator-architecture.md)
+- [ADR-0002: Extensible trigger engine](./ADR-0002-trigger-engine.md)

@@ -1,5 +1,7 @@
 package io.github.aresprojects.local.runtime.service.sqs;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /** Owns SQS queue and message state independently from protocol and transport code. */
@@ -41,6 +43,16 @@ public interface SqsQueueStore {
     Optional<SqsReceivedMessage> receiveMessage(String queueUrl, int visibilityTimeoutSeconds);
 
     /**
+     * Atomically claims up to the requested number of currently available messages.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @param maximumMessages a value from 1 through 10, matching one SQS source read
+     * @param visibilityTimeoutSeconds how long claimed messages remain unavailable
+     * @return claimed messages in source order, or an empty list when none are available
+     */
+    List<SqsLeasedMessage> claimMessages(String queueUrl, int maximumMessages, int visibilityTimeoutSeconds);
+
+    /**
      * Deletes the message identified by a receipt handle.
      *
      * @param queueUrl the case-sensitive queue URL
@@ -48,4 +60,22 @@ public interface SqsQueueStore {
      * @return whether a message was deleted
      */
     boolean deleteMessage(String queueUrl, String receiptHandle);
+
+    /**
+     * Deletes every message whose current receipt handle is supplied.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @param receiptHandles current receipt handles to acknowledge
+     * @return the number of messages deleted
+     */
+    int deleteMessages(String queueUrl, Collection<String> receiptHandles);
+
+    /**
+     * Makes claimed but uninvoked records immediately available to another consumer.
+     *
+     * @param queueUrl the case-sensitive queue URL
+     * @param receiptHandles current receipt handles to release
+     * @return the number of messages released
+     */
+    int releaseMessages(String queueUrl, Collection<String> receiptHandles);
 }
