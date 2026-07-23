@@ -3,10 +3,19 @@ package io.github.aresprojects.local.runtime.service.sqs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aresprojects.local.runtime.LocalAwsServer;
 import io.github.aresprojects.local.runtime.LocalAwsServerConfig;
+import io.github.aresprojects.local.runtime.trigger.AwsResourceReference;
+import io.github.aresprojects.local.runtime.trigger.TriggerEngine;
+import io.github.aresprojects.local.runtime.trigger.TriggerMapping;
+import io.github.aresprojects.local.runtime.trigger.TriggerRegistry;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
+import io.github.aresprojects.local.runtime.trigger.sqs.SqsLambdaPollingDriver;
+import io.github.aresprojects.local.runtime.trigger.sqs.SqsLambdaTriggerSettings;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,6 +24,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -154,12 +167,79 @@ class SqsJsonIntegrationTest {
         }
     }
 
+    @Test
+    void awsSdkV2MessagesFlowThroughTheTriggerEngineToLambda() throws Exception {
+        InMemorySqsQueueStore store = new InMemorySqsQueueStore();
+        try (LocalAwsServer server = server(store)) {
+            InetSocketAddress address = server.start();
+            URI endpoint = URI.create("http://" + address.getHostString() + ":" + address.getPort());
+            try (SqsClient client = sdkClient(endpoint)) {
+                String queueUrl = client.createQueue(CreateQueueRequest.builder()
+                                .queueName("trigger-orders")
+                                .build())
+                        .queueUrl();
+                client.sendMessage(SendMessageRequest.builder()
+                        .queueUrl(queueUrl)
+                        .messageBody("from sdk to lambda")
+                        .build());
+                String queueArn = "arn:aws:sqs:us-east-1:000000000000:trigger-orders";
+                CountDownLatch invoked = new CountDownLatch(1);
+                AtomicReference<byte[]> event = new AtomicReference<>();
+                SqsLambdaPollingDriver driver = new SqsLambdaPollingDriver(store, (functionName, payload) -> {
+                    event.set(payload);
+                    invoked.countDown();
+                    return CompletableFuture.completedFuture(LambdaInvocationResult.success(new byte[0]));
+                });
+                SqsLambdaTriggerSettings settings =
+                        SqsLambdaTriggerSettings.defaults(queueUrl, queueArn, "us-east-1", "orders-function");
+                TriggerRegistry triggers = TriggerRegistry.builder()
+                        .registerPollingDriver(driver)
+                        .registerMapping(new TriggerMapping(
+                                "orders-mapping",
+                                driver.driverId(),
+                                new AwsResourceReference("sqs", queueArn),
+                                new AwsResourceReference("lambda", "orders-function"),
+                                true,
+                                settings))
+                        .build();
+
+                try (TriggerEngine engine = new TriggerEngine(triggers)) {
+                    engine.start();
+                    assertEquals(true, invoked.await(2, TimeUnit.SECONDS));
+                }
+
+                JsonNode record = MAPPER.readTree(event.get()).get("Records").get(0);
+                assertEquals("from sdk to lambda", record.get("body").textValue());
+                assertEquals(queueArn, record.get("eventSourceARN").textValue());
+                assertTrue(client.receiveMessage(ReceiveMessageRequest.builder()
+                                .queueUrl(queueUrl)
+                                .visibilityTimeout(0)
+                                .build())
+                        .messages()
+                        .isEmpty());
+            }
+        }
+    }
+
     private static LocalAwsServer server() {
+        return server(new InMemorySqsQueueStore());
+    }
+
+    private static LocalAwsServer server(InMemorySqsQueueStore store) {
         return new LocalAwsServer(
                 new LocalAwsServerConfig("127.0.0.1", 0, 1024 * 1024),
                 io.github.aresprojects.local.runtime.service.AwsServiceRegistry.builder()
-                        .register(new SqsJsonAdapter(new InMemorySqsQueueStore()))
+                        .register(new SqsJsonAdapter(store))
                         .build());
+    }
+
+    private static SqsClient sdkClient(URI endpoint) {
+        return SqsClient.builder()
+                .endpointOverride(endpoint)
+                .region(Region.US_EAST_1)
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(AwsBasicCredentials.create("access-key", "secret-key")))
+                .build();
     }
 
     private static HttpResponse<String> sendJson(String endpoint, String target, String body) throws Exception {
