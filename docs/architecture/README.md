@@ -51,3 +51,4 @@ Issues describe the work to do. ADRs describe the architectural reasoning behind
 
 - [ADR-0001: AWS emulator architecture](./ADR-0001-aws-emulator-architecture.md)
 - [ADR-0002: Extensible trigger engine](./ADR-0002-trigger-engine.md)
+- [ADR-0003: Local Lambda deployment and execution](./ADR-0003-local-lambda-deployment-and-execution.md)
