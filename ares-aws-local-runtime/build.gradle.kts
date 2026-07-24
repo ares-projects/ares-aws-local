@@ -4,6 +4,8 @@ plugins {
 }
 
 dependencies {
+    compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    implementation(project(":ares-aws-local-spi"))
     implementation(platform("io.netty:netty-bom:4.2.16.Final"))
     implementation("io.netty:netty-codec-http")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.3")
