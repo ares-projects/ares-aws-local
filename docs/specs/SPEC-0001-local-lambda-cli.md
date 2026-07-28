@@ -3,9 +3,9 @@
 ## Status
 
 - State: In progress
-- Current milestone: M2
-- Completion: 2 of 7 milestones
-- Last updated: 2026-07-23
+- Current milestone: M3
+- Completion: 3 of 7 milestones
+- Last updated: 2026-07-27
 
 ## Objective
 
@@ -447,7 +447,7 @@ Verification:
 
 ### M2 — Implement CLI project discovery and Java ZIP builds
 
-- [ ] Complete M2.
+- [x] Complete M2.
 
 Work:
 
@@ -698,7 +698,7 @@ Add one row only after a milestone passes its verification gate.
 |---|---|---|---|
 | M0 | 2026-07-23 | Working tree | `./gradlew formatCheck check` passed; ADR-0003 and architecture index added |
 | M1 | 2026-07-23 | Working tree | `./gradlew formatCheck check` passed; SPI and target module skeletons added |
-| M2 | — | — | Not started |
+| M2 | 2026-07-27 | Working tree | `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed; installed `ares build` built `examples/hello-lambda`; ZIP listing and repeated SHA-256 were verified; `ares local start` health was verified on port 4567 |
 | M3 | — | — | Not started |
 | M4 | — | — | Not started |
 | M5 | — | — | Not started |

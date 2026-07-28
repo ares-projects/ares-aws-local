@@ -1,0 +1,13 @@
+schemaVersion: 1
+functions:
+  hello:
+    runtime: java21
+    architecture: arm64
+    handler: example.HelloHandler
+    environment:
+      GREETING: Ares
+    build:
+      command:
+        - ../../gradlew
+        - lambdaZip
+      artifact: build/distributions/hello.zip
