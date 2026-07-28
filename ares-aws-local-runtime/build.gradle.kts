@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    implementation(project(":ares-aws-local-lambda"))
     implementation(project(":ares-aws-local-spi"))
     implementation(platform("io.netty:netty-bom:4.2.16.Final"))
     implementation("io.netty:netty-codec-http")
@@ -12,6 +13,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation(platform("software.amazon.awssdk:bom:2.46.8"))
+    testImplementation("software.amazon.awssdk:lambda")
     testImplementation("software.amazon.awssdk:sqs")
 }
 
@@ -21,4 +23,12 @@ application {
 
 pitest {
     targetClasses.set(setOf("io.github.aresprojects.local.runtime.*"))
+    excludedClasses.set(
+        setOf(
+            "io.github.aresprojects.local.runtime.http.netty.*",
+            "io.github.aresprojects.local.runtime.service.lambda.LambdaJsonAdapter",
+            "io.github.aresprojects.local.runtime.trigger.TriggerEngine",
+            "io.github.aresprojects.local.runtime.trigger.sqs.SqsLambdaPollingDriver",
+        ),
+    )
 }

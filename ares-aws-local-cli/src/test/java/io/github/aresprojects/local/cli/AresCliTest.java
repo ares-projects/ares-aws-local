@@ -2,8 +2,13 @@ package io.github.aresprojects.local.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.aresprojects.local.cli.builder.AresBuildService;
+import io.github.aresprojects.local.cli.deploy.AresDeploymentService;
+import io.github.aresprojects.local.cli.deploy.AresDeploymentService.DeploymentOutcome;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,7 +26,7 @@ class AresCliTest {
         AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService());
         AresCli defaultCli = new AresCli();
 
-        int exitCode = cli.execute("deploy", "function");
+        int exitCode = cli.execute("unknown", "function");
 
         assertEquals(AresExitCode.USAGE_ERROR.value(), exitCode);
         assertEquals(true, errors.getFirst().contains("Usage"));
@@ -64,8 +69,6 @@ class AresCliTest {
         assertEquals(AresExitCode.SUCCESS.value(), exitCode, errors.toString());
         assertEquals(3, output.size());
         assertEquals(true, output.getFirst().contains("Built Lambda function 'hello'"));
-
-        AresCli.main(new String[] {"build", directory.toString()});
     }
 
     @Test
@@ -78,6 +81,32 @@ class AresCliTest {
 
         assertEquals(AresExitCode.BUILD_FAILED.value(), exitCode, errors.toString());
         assertEquals(true, errors.getFirst().contains("not a readable ZIP"));
+    }
+
+    @Test
+    void deploysAndMapsDeploymentFailures(@TempDir Path directory) throws Exception {
+        List<String> output = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        AresDeploymentService deployment = mock(AresDeploymentService.class);
+        when(deployment.deploy(any()))
+                .thenReturn(new DeploymentOutcome("Created Lambda function 'hello'", "java21", "http://local"))
+                .thenThrow(new AresConfigurationException("invalid configuration"))
+                .thenThrow(new AresBuildException("build failed"))
+                .thenThrow(new AresDeploymentException("deployment failed"));
+        AresCli cli = new AresCli(output::add, errors::add, new AresBuildService(), deployment, () -> {});
+
+        assertEquals(0, cli.execute("deploy", directory.toString()));
+        assertEquals(2, cli.execute("deploy", directory.toString()));
+        assertEquals(4, cli.execute("deploy", directory.toString()));
+        assertEquals(5, cli.execute("deploy", directory.toString()));
+        assertEquals(3, output.size());
+        assertEquals("Created Lambda function 'hello'", output.getFirst());
+        assertEquals("Runtime: java21", output.get(1));
+        assertEquals("Endpoint: http://local", output.get(2));
+        assertEquals("invalid configuration", errors.get(0));
+        assertEquals("build failed", errors.get(1));
+        assertEquals("deployment failed", errors.get(2));
+        assertEquals(2, cli.execute("deploy", "bad\0path"));
     }
 
     @Test

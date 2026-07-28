@@ -12,7 +12,10 @@ public enum AresExitCode {
     RUNTIME_UNAVAILABLE(3),
 
     /** The function build or artifact validation failed. */
-    BUILD_FAILED(4);
+    BUILD_FAILED(4),
+
+    /** Deployment API or local deployment reconciliation failed. */
+    DEPLOYMENT_FAILED(5);
 
     private final int value;
 
