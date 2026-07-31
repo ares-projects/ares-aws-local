@@ -15,6 +15,7 @@ import java.util.Optional;
 /** Decodes and encodes the transport-independent parts of AWS JSON 1.0 requests. */
 public final class AwsJsonProtocol {
     public static final String CONTENT_TYPE = "application/x-amz-json-1.0";
+    public static final String CONTENT_TYPE_1_1 = "application/x-amz-json-1.1";
     public static final String TARGET_HEADER = "x-amz-target";
 
     private final ObjectMapper objectMapper;
@@ -82,10 +83,17 @@ public final class AwsJsonProtocol {
 
     /** Encodes a client or service error using the AWS JSON 1.0 error shape. */
     public AwsHttpResponse error(AwsRequestContext request, int statusCode, String errorCode, String message) {
+        return error(request, statusCode, errorCode, message, "com.amazonaws.sqs");
+    }
+
+    /** Encodes an error with the service namespace required by the selected AWS API. */
+    public AwsHttpResponse error(
+            AwsRequestContext request, int statusCode, String errorCode, String message, String errorNamespace) {
         Objects.requireNonNull(errorCode, "errorCode");
         Objects.requireNonNull(message, "message");
+        Objects.requireNonNull(errorNamespace, "errorNamespace");
         var payload = objectMapper.createObjectNode();
-        payload.put("__type", errorCode.contains("#") ? errorCode : "com.amazonaws.sqs#" + errorCode);
+        payload.put("__type", errorCode.contains("#") ? errorCode : errorNamespace + "#" + errorCode);
         payload.put("message", message);
         return response(statusCode, request, payload);
     }
@@ -95,12 +103,21 @@ public final class AwsJsonProtocol {
             return new AwsHttpResponse(
                     statusCode,
                     Map.of(
-                            "content-type", List.of(CONTENT_TYPE),
+                            "content-type", List.of(responseContentType(request)),
                             "x-amzn-requestid", List.of(request.requestId())),
                     objectMapper.writeValueAsBytes(payload));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Unable to encode AWS JSON response", exception);
         }
+    }
+
+    private static String responseContentType(AwsRequestContext request) {
+        return request.firstHeader("content-type")
+                .map(value -> value.split(";", 2)[0].trim().toLowerCase(Locale.ROOT))
+                .filter(value -> value.equals(CONTENT_TYPE)
+                        || value.equals(CONTENT_TYPE_1_1)
+                        || value.equals("application/json"))
+                .orElse(CONTENT_TYPE);
     }
 
     private JsonNode decodePayload(byte[] body) {
@@ -125,6 +142,6 @@ public final class AwsJsonProtocol {
 
     private static boolean isJsonContentType(String value) {
         String mediaType = value.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-        return mediaType.equals(CONTENT_TYPE);
+        return mediaType.equals(CONTENT_TYPE) || mediaType.equals(CONTENT_TYPE_1_1);
     }
 }
