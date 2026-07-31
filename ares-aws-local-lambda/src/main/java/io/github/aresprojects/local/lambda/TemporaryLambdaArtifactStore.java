@@ -19,6 +19,7 @@ public final class TemporaryLambdaArtifactStore implements LambdaArtifactStore {
     static final int MAX_ENTRIES = 10_000;
 
     private final Path root;
+    private boolean closed;
 
     /** Creates an isolated temporary artifact directory. */
     public TemporaryLambdaArtifactStore() {
@@ -42,22 +43,13 @@ public final class TemporaryLambdaArtifactStore implements LambdaArtifactStore {
 
     @Override
     public synchronized LambdaArtifact stage(byte[] zipBytes) {
-        Objects.requireNonNull(zipBytes, "zipBytes");
-        if (zipBytes.length == 0) {
-            throw new LambdaServiceException("InvalidParameterValueException", "Lambda ZIP artifact must not be empty");
-        }
-        if (zipBytes.length > MAX_UPLOAD_BYTES) {
-            throw new LambdaServiceException(
-                    "RequestTooLargeException", "Lambda ZIP artifact exceeds the 50 MiB local upload limit");
-        }
+        ensureOpen();
+        validateUpload(zipBytes);
         Path staged = null;
         try {
-            staged = Files.createTempFile(root, "revision-", ".zip");
-            Files.write(staged, zipBytes);
+            staged = writeUpload(zipBytes);
             validateZip(staged);
-            byte[] digest = digest(zipBytes);
-            return new LambdaArtifact(
-                    staged, zipBytes.length, hex(digest), Base64.getEncoder().encodeToString(digest));
+            return artifact(staged, zipBytes);
         } catch (LambdaServiceException exception) {
             deletePath(staged);
             throw exception;
@@ -69,8 +61,40 @@ public final class TemporaryLambdaArtifactStore implements LambdaArtifactStore {
         }
     }
 
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Lambda artifact store is closed; create a new service for deployments");
+        }
+    }
+
+    private static void validateUpload(byte[] zipBytes) {
+        Objects.requireNonNull(zipBytes, "zipBytes");
+        if (zipBytes.length == 0) {
+            throw new LambdaServiceException("InvalidParameterValueException", "Lambda ZIP artifact must not be empty");
+        }
+        if (zipBytes.length > MAX_UPLOAD_BYTES) {
+            throw new LambdaServiceException(
+                    "RequestTooLargeException", "Lambda ZIP artifact exceeds the 50 MiB local upload limit");
+        }
+    }
+
+    private Path writeUpload(byte[] zipBytes) throws IOException {
+        Path staged = Files.createTempFile(root, "revision-", ".zip");
+        Files.write(staged, zipBytes);
+        return staged;
+    }
+
+    private static LambdaArtifact artifact(Path staged, byte[] zipBytes) {
+        byte[] digest = digest(zipBytes);
+        return new LambdaArtifact(
+                staged, zipBytes.length, hex(digest), Base64.getEncoder().encodeToString(digest));
+    }
+
     @Override
     public synchronized void delete(LambdaArtifact artifact) {
+        if (closed) {
+            return;
+        }
         if (artifact != null) {
             deletePath(artifact.path());
         }
@@ -78,6 +102,10 @@ public final class TemporaryLambdaArtifactStore implements LambdaArtifactStore {
 
     @Override
     public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         try (var paths = Files.walk(root)) {
             var orderedPaths =
                     paths.sorted((left, right) -> right.compareTo(left)).toList();

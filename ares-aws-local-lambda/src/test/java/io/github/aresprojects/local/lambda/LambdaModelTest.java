@@ -2,6 +2,7 @@ package io.github.aresprojects.local.lambda;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -102,7 +103,10 @@ class LambdaModelTest {
         assertEquals(replacement, store.remove("hello").orElseThrow());
         assertEquals(Optional.empty(), store.remove("missing"));
 
-        new NoOpLambdaExecutionBackend().invalidate("hello", "revision");
+        NoOpLambdaExecutionBackend noOpBackend = new NoOpLambdaExecutionBackend();
+        noOpBackend.invalidate("hello", "revision");
+        assertTrue(
+                noOpBackend.invoke(function, new byte[0]).toCompletableFuture().isCompletedExceptionally());
         LambdaServiceException exception = new LambdaServiceException("Code", "message");
         assertEquals("Code", exception.errorCode());
     }

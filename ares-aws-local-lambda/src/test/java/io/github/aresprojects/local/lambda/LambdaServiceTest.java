@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +23,46 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class LambdaServiceTest {
+
+    @Test
+    void invokesThroughTheConfiguredExecutionBackendAndClosesIt(@TempDir Path directory) {
+        AtomicInteger closes = new AtomicInteger();
+        LambdaExecutionBackend backend = new LambdaExecutionBackend() {
+            @Override
+            public java.util.concurrent.CompletionStage<LambdaInvocationResult> invoke(
+                    LambdaFunctionSnapshot function, byte[] payload) {
+                return java.util.concurrent.CompletableFuture.completedFuture(LambdaInvocationResult.success(payload));
+            }
+
+            @Override
+            public void invalidate(String functionName, String revisionId) {}
+
+            @Override
+            public void close() {
+                closes.incrementAndGet();
+            }
+        };
+        try (LambdaService service = new LambdaService(backend)) {
+            service.create(
+                    "hello",
+                    "java21",
+                    "arm64",
+                    "Handler",
+                    "role",
+                    "",
+                    3,
+                    128,
+                    Map.of(),
+                    zip("handler.class", new byte[] {1}));
+
+            LambdaInvocationResult result = service.invoke("hello", new byte[] {7})
+                    .toCompletableFuture()
+                    .join();
+
+            assertEquals(7, result.payload()[0]);
+        }
+        assertEquals(1, closes.get());
+    }
 
     @Test
     void createsReadsUpdatesAndDeletesAFunction(@TempDir Path directory) {

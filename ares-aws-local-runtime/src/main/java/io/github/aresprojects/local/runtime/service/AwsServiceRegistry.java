@@ -28,11 +28,12 @@ import java.util.concurrent.CompletionStage;
  * <p>Adapters are evaluated in registration order. This lets protocol-specific adapters coexist for one AWS
  * service, provided their {@link AwsServiceAdapter#supports(AwsRequestContext)} checks are appropriately scoped.
  */
-public final class AwsServiceRegistry implements AwsRequestHandler {
+public final class AwsServiceRegistry implements AwsRequestHandler, AutoCloseable {
     private static final AwsHttpResponse NO_MATCH_RESPONSE =
             AwsHttpResponse.json(404, "{\"error\":\"no AWS service adapter matched request\"}");
 
     private final List<AwsServiceAdapter> adapters;
+    private boolean closed;
 
     private AwsServiceRegistry(List<AwsServiceAdapter> adapters) {
         this.adapters = List.copyOf(adapters);
@@ -58,6 +59,34 @@ public final class AwsServiceRegistry implements AwsRequestHandler {
             }
         }
         return CompletableFuture.completedFuture(NO_MATCH_RESPONSE);
+    }
+
+    /** Closes adapters that own process resources, such as Lambda execution containers. */
+    @Override
+    public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        RuntimeException failure = null;
+        for (AwsServiceAdapter adapter : adapters) {
+            if (adapter instanceof AutoCloseable closeable) {
+                try {
+                    closeable.close();
+                } catch (Exception exception) {
+                    RuntimeException closeFailure = new IllegalStateException(
+                            "Could not close AWS service adapter '" + adapter.serviceName() + "'", exception);
+                    if (failure == null) {
+                        failure = closeFailure;
+                    } else {
+                        failure.addSuppressed(closeFailure);
+                    }
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     /** Builds an immutable registry while retaining adapter registration order. */

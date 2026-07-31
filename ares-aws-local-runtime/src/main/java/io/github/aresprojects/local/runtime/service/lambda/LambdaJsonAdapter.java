@@ -27,7 +27,7 @@ import java.util.concurrent.CompletionStage;
 
 /** Exposes the M3 Lambda control-plane subset through AWS JSON 1.1. */
 @SuppressWarnings("PMD.CyclomaticComplexity")
-public final class LambdaJsonAdapter implements AwsServiceAdapter {
+public final class LambdaJsonAdapter implements AwsServiceAdapter, AutoCloseable {
     private static final String ERROR_NAMESPACE = "com.amazonaws.lambda";
     private static final Set<String> CREATE_FIELDS = Set.of(
             "Code",
@@ -102,6 +102,12 @@ public final class LambdaJsonAdapter implements AwsServiceAdapter {
             return CompletableFuture.completedFuture(
                     error(request, 400, "InvalidParameterValueException", exception.getMessage()));
         }
+    }
+
+    /** Releases the Lambda service's artifact and execution resources during runtime shutdown. */
+    @Override
+    public void close() {
+        service.close();
     }
 
     private AwsHttpResponse dispatch(AwsRequestContext request, String operation, JsonNode payload) {
