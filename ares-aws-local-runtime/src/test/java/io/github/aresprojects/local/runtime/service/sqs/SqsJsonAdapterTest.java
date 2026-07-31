@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -256,12 +257,11 @@ class SqsJsonAdapterTest {
         assertThrows(IllegalArgumentException.class, () -> new SqsMessage("id", "body", ""));
     }
 
-    private static JsonNode body(io.github.aresprojects.local.runtime.http.AwsHttpResponse response) throws Exception {
+    private static JsonNode body(AwsHttpResponse response) throws Exception {
         return MAPPER.readTree(response.body());
     }
 
-    private static String errorCode(io.github.aresprojects.local.runtime.http.AwsHttpResponse response)
-            throws Exception {
+    private static String errorCode(AwsHttpResponse response) throws Exception {
         return body(response).get("__type").textValue().substring("com.amazonaws.sqs#".length());
     }
 

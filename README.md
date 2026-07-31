@@ -44,6 +44,15 @@ ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
 
 `ares deploy` derives the runtime, architecture, handler, environment, and ZIP artifact
 from `ares.yaml` and reconciles the function through the local Lambda REST-JSON API. The
-first deployment supports Java 21 ZIP packages; function invocation and Docker/RIE
-execution are later milestones. Function state and artifacts are process-local, and the
-local endpoint does not validate AWS authentication yet.
+current execution slice supports Java 21 ZIP packages in Docker through the AWS Lambda
+Runtime Interface Emulator (RIE). Invoke the deployed function with:
+
+```bash
+ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares invoke hello \
+  --event ./examples/hello-lambda/event.json
+```
+
+The payload is written to standard output; diagnostics are written to standard error.
+Docker must be available for invocation. Function state and artifacts are process-local,
+and the local endpoint does not validate AWS authentication yet.

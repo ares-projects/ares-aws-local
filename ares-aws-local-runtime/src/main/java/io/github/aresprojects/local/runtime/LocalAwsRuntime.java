@@ -34,8 +34,14 @@ public final class LocalAwsRuntime {
             Consumer<Thread> shutdownHookRegistrar,
             CountDownLatch shutdown,
             Consumer<InetSocketAddress> startupLogger) {
-        shutdownHookRegistrar.accept(new Thread(shutdown::countDown, "ares-aws-local-shutdown"));
-        try (LocalAwsServer server = serverFactory.get()) {
+        LocalAwsServer server = serverFactory.get();
+        shutdownHookRegistrar.accept(new Thread(
+                () -> {
+                    shutdown.countDown();
+                    server.close();
+                },
+                "ares-aws-local-shutdown"));
+        try (server) {
             InetSocketAddress address = server.start();
             startupLogger.accept(address);
             shutdown.await();

@@ -12,6 +12,7 @@ import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import io.github.aresprojects.local.runtime.protocol.json.AwsJsonProtocol;
 import io.github.aresprojects.local.runtime.protocol.json.AwsJsonProtocolException;
 import io.github.aresprojects.local.runtime.service.AwsServiceAdapter;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -87,6 +88,9 @@ public final class LambdaJsonAdapter implements AwsServiceAdapter, AutoCloseable
             Route route = route(request)
                     .orElseThrow(() ->
                             new AwsJsonProtocolException("InvalidRequest", "unsupported Lambda HTTP method or path"));
+            if ("Invoke".equals(route.operation())) {
+                return invoke(request, route.functionName());
+            }
             JsonNode payload = decodePayload(request.body());
             if (route.functionName() != null && payload instanceof ObjectNode object) {
                 object.put("FunctionName", route.functionName());
@@ -127,6 +131,27 @@ public final class LambdaJsonAdapter implements AwsServiceAdapter, AutoCloseable
         };
     }
 
+    private CompletionStage<AwsHttpResponse> invoke(AwsRequestContext request, String functionName) {
+        try {
+            CompletionStage<LambdaInvocationResult> invocation = Objects.requireNonNull(
+                    service.invoke(functionName, request.body()),
+                    "Lambda execution backend returned a null completion stage");
+            return invocation.thenApply(result -> invocationResponse(request, result));
+        } catch (LambdaServiceException exception) {
+            return CompletableFuture.completedFuture(
+                    error(request, statusCode(exception.errorCode()), exception.errorCode(), exception.getMessage()));
+        }
+    }
+
+    private static AwsHttpResponse invocationResponse(AwsRequestContext request, LambdaInvocationResult result) {
+        Map<String, List<String>> headers = new LinkedHashMap<>();
+        headers.put("content-type", List.of("application/json"));
+        headers.put("x-amzn-requestid", List.of(request.requestId()));
+        headers.put("x-amz-executed-version", List.of("$LATEST"));
+        result.functionError().ifPresent(value -> headers.put("x-amz-function-error", List.of(value)));
+        return new AwsHttpResponse(200, headers, result.payload());
+    }
+
     private Optional<Route> route(AwsRequestContext request) {
         Objects.requireNonNull(request, "request");
         String path = request.rawTarget();
@@ -152,6 +177,11 @@ public final class LambdaJsonAdapter implements AwsServiceAdapter, AutoCloseable
                 && "configuration".equals(parts[1])
                 && request.method().equalsIgnoreCase("GET")) {
             return Optional.of(new Route("GetFunctionConfiguration", decodePath(parts[0])));
+        }
+        if (parts.length == 2
+                && "invocations".equals(parts[1])
+                && request.method().equalsIgnoreCase("POST")) {
+            return Optional.of(new Route("Invoke", decodePath(parts[0])));
         }
         if (parts.length == 1 && request.method().equalsIgnoreCase("DELETE")) {
             return Optional.of(new Route("DeleteFunction", decodePath(parts[0])));

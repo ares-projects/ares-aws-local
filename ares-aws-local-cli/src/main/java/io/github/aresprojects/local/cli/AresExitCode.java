@@ -2,6 +2,9 @@ package io.github.aresprojects.local.cli;
 
 /** Defines the stable process exit codes exposed by the Ares CLI. */
 public enum AresExitCode {
+    /** An unexpected local failure occurred. */
+    INTERNAL_ERROR(1),
+
     /** The command completed successfully. */
     SUCCESS(0),
 
@@ -15,7 +18,13 @@ public enum AresExitCode {
     BUILD_FAILED(4),
 
     /** Deployment API or local deployment reconciliation failed. */
-    DEPLOYMENT_FAILED(5);
+    DEPLOYMENT_FAILED(5),
+
+    /** The function returned a Lambda-level error response. */
+    FUNCTION_ERROR(6),
+
+    /** Required local infrastructure, such as Docker or the runtime endpoint, is unavailable. */
+    INFRASTRUCTURE_UNAVAILABLE(7);
 
     private final int value;
 

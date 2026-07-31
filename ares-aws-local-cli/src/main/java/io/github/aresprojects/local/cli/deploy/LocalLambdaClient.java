@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aresprojects.local.cli.builder.DeploymentResult;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -94,6 +95,17 @@ public final class LocalLambdaClient {
         invoke("DELETE", functionPath(functionName), null);
     }
 
+    /** Invokes a deployed function and preserves raw payload and function-error metadata. */
+    public LambdaInvocationResult invokeFunction(String functionName, byte[] payload) throws LambdaClientException {
+        Objects.requireNonNull(payload, "payload");
+        HttpResponse<byte[]> response =
+                sendRaw(buildRequest("POST", functionPath(functionName) + "/invocations", payload));
+        if (response.statusCode() >= 400) {
+            checkResponse(response.statusCode(), readPayload(response.body()));
+        }
+        return new LambdaInvocationResult(response.body(), response.headers().firstValue("x-amz-function-error"));
+    }
+
     /** Returns the normalized endpoint shown in deployment diagnostics. */
     public String endpointDescription() {
         String value = endpoint.toString();
@@ -124,9 +136,14 @@ public final class LocalLambdaClient {
     }
 
     private JsonNode send(HttpRequest request) throws LambdaClientException {
-        HttpResponse<byte[]> response;
+        HttpResponse<byte[]> response = sendRaw(request);
+        JsonNode payload = readPayload(response.body());
+        return checkResponse(response.statusCode(), payload);
+    }
+
+    private HttpResponse<byte[]> sendRaw(HttpRequest request) throws LambdaClientException {
         try {
-            response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            return httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException exception) {
             throw new LambdaClientException(
                     "LocalEndpointUnavailable", 0, "Could not reach local Lambda endpoint '" + endpoint + "'");
@@ -137,8 +154,6 @@ public final class LocalLambdaClient {
                     0,
                     "Interrupted while calling local Lambda endpoint '" + endpoint + "'");
         }
-        JsonNode payloadNode = readPayload(response.body());
-        return checkResponse(response.statusCode(), payloadNode);
     }
 
     private static JsonNode checkResponse(int statusCode, JsonNode payload) throws LambdaClientException {

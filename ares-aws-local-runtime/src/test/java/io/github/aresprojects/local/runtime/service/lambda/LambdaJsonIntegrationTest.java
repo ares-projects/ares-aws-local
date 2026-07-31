@@ -2,21 +2,27 @@ package io.github.aresprojects.local.runtime.service.lambda;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.aresprojects.local.lambda.InMemoryLambdaFunctionStore;
+import io.github.aresprojects.local.lambda.LambdaExecutionBackend;
+import io.github.aresprojects.local.lambda.LambdaFunctionSnapshot;
 import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.lambda.TemporaryLambdaArtifactStore;
 import io.github.aresprojects.local.runtime.LocalAwsServer;
 import io.github.aresprojects.local.runtime.LocalAwsServerConfig;
 import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
@@ -31,6 +37,7 @@ import software.amazon.awssdk.services.lambda.model.CreateFunctionRequest;
 import software.amazon.awssdk.services.lambda.model.DeleteFunctionRequest;
 import software.amazon.awssdk.services.lambda.model.FunctionCode;
 import software.amazon.awssdk.services.lambda.model.GetFunctionRequest;
+import software.amazon.awssdk.services.lambda.model.InvokeRequest;
 import software.amazon.awssdk.services.lambda.model.Runtime;
 import software.amazon.awssdk.services.lambda.model.UpdateFunctionCodeRequest;
 import software.amazon.awssdk.services.lambda.model.UpdateFunctionConfigurationRequest;
@@ -91,6 +98,60 @@ class LambdaJsonIntegrationTest {
                         () -> client.getFunction(GetFunctionRequest.builder()
                                 .functionName("hello")
                                 .build()));
+            }
+        }
+    }
+
+    @Test
+    void sdkV2CanInvokeAndPreserveFunctionErrors(@TempDir Path directory) {
+        LambdaExecutionBackend backend = new LambdaExecutionBackend() {
+            @Override
+            public CompletableFuture<LambdaInvocationResult> invoke(LambdaFunctionSnapshot function, byte[] payload) {
+                String event = new String(payload, StandardCharsets.UTF_8);
+                if (event.contains("fail")) {
+                    return CompletableFuture.completedFuture(LambdaInvocationResult.functionError(
+                            "{\"errorMessage\":\"failed\"}".getBytes(StandardCharsets.UTF_8), "Unhandled"));
+                }
+                return CompletableFuture.completedFuture(
+                        LambdaInvocationResult.success("{\"message\":\"Hello\"}".getBytes(StandardCharsets.UTF_8)));
+            }
+
+            @Override
+            public void invalidate(String functionName, String revisionId) {}
+        };
+        LambdaService service = new LambdaService(
+                new InMemoryLambdaFunctionStore(),
+                new TemporaryLambdaArtifactStore(directory.resolve("artifacts")),
+                backend,
+                Clock.fixed(Instant.parse("2026-07-27T00:00:00Z"), ZoneOffset.UTC),
+                "us-east-1");
+        try (LocalAwsServer server = server(service)) {
+            InetSocketAddress address = server.start();
+            try (LambdaClient client = client(address)) {
+                client.createFunction(CreateFunctionRequest.builder()
+                        .functionName("hello")
+                        .runtime(Runtime.JAVA21)
+                        .architectures(Architecture.ARM64)
+                        .handler("example.HelloHandler")
+                        .role("arn:aws:iam::000000000000:role/lambda-local")
+                        .code(FunctionCode.builder()
+                                .zipFile(SdkBytes.fromByteArray(zip("handler.class")))
+                                .build())
+                        .build());
+
+                var success = client.invoke(InvokeRequest.builder()
+                        .functionName("hello")
+                        .payload(SdkBytes.fromUtf8String("{\"name\":\"Ada\"}"))
+                        .build());
+                assertEquals("{\"message\":\"Hello\"}", success.payload().asUtf8String());
+                assertNull(success.functionError());
+
+                var failure = client.invoke(InvokeRequest.builder()
+                        .functionName("hello")
+                        .payload(SdkBytes.fromUtf8String("{\"fail\":true}"))
+                        .build());
+                assertEquals("Unhandled", failure.functionError());
+                assertEquals("{\"errorMessage\":\"failed\"}", failure.payload().asUtf8String());
             }
         }
     }

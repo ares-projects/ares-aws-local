@@ -4,7 +4,14 @@ import io.github.aresprojects.local.cli.builder.AresBuildService;
 import io.github.aresprojects.local.cli.builder.DeploymentResult;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService.DeploymentOutcome;
+import io.github.aresprojects.local.cli.deploy.LambdaClientException;
+import io.github.aresprojects.local.cli.deploy.LocalLambdaClient;
 import io.github.aresprojects.local.runtime.LocalAwsRuntime;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -15,12 +22,14 @@ import java.util.function.Consumer;
 /** Implements the CLI-first local Lambda workflow. */
 public final class AresCli {
     private static final String USAGE =
-            "Usage: ares local start | ares build <function-path> | ares deploy <function-path>";
+            "Usage: ares local start | ares build <function-path> | ares deploy <function-path>"
+                    + " | ares invoke <function-name> [--event <path> | --payload <json>]";
 
     private final Consumer<String> output;
     private final Consumer<String> error;
     private final AresBuildService buildService;
     private final AresDeploymentService deploymentService;
+    private final LocalLambdaClient lambdaClient;
     private final Runnable runtimeStarter;
 
     /** Creates a CLI using standard output, standard error, and production build boundaries. */
@@ -30,6 +39,7 @@ public final class AresCli {
                 System.err::println,
                 new AresBuildService(),
                 new AresDeploymentService(),
+                new LocalLambdaClient(),
                 () -> LocalAwsRuntime.main(new String[0]));
     }
 
@@ -38,8 +48,8 @@ public final class AresCli {
                 output,
                 error,
                 buildService,
-                new AresDeploymentService(
-                        buildService, new io.github.aresprojects.local.cli.deploy.LocalLambdaClient()),
+                new AresDeploymentService(buildService, new LocalLambdaClient()),
+                new LocalLambdaClient(),
                 () -> LocalAwsRuntime.main(new String[0]));
     }
 
@@ -48,8 +58,8 @@ public final class AresCli {
                 output,
                 error,
                 buildService,
-                new AresDeploymentService(
-                        buildService, new io.github.aresprojects.local.cli.deploy.LocalLambdaClient()),
+                new AresDeploymentService(buildService, new LocalLambdaClient()),
+                new LocalLambdaClient(),
                 runtimeStarter);
     }
 
@@ -58,12 +68,23 @@ public final class AresCli {
             Consumer<String> error,
             AresBuildService buildService,
             AresDeploymentService deploymentService,
+            LocalLambdaClient lambdaClient,
             Runnable runtimeStarter) {
         this.output = Objects.requireNonNull(output, "output");
         this.error = Objects.requireNonNull(error, "error");
         this.buildService = Objects.requireNonNull(buildService, "buildService");
         this.deploymentService = Objects.requireNonNull(deploymentService, "deploymentService");
+        this.lambdaClient = Objects.requireNonNull(lambdaClient, "lambdaClient");
         this.runtimeStarter = Objects.requireNonNull(runtimeStarter, "runtimeStarter");
+    }
+
+    AresCli(
+            Consumer<String> output,
+            Consumer<String> error,
+            AresBuildService buildService,
+            AresDeploymentService deploymentService,
+            Runnable runtimeStarter) {
+        this(output, error, buildService, deploymentService, new LocalLambdaClient(), runtimeStarter);
     }
 
     /** Runs a command and returns its documented process exit code without terminating the test process. */
@@ -77,6 +98,9 @@ public final class AresCli {
         }
         if (args.size() == 2 && "deploy".equals(args.get(0))) {
             return deploy(args.get(1));
+        }
+        if (args.size() >= 2 && "invoke".equals(args.get(0))) {
+            return invoke(args);
         }
         error.accept("Invalid command; " + USAGE);
         return AresExitCode.USAGE_ERROR.value();
@@ -143,6 +167,90 @@ public final class AresCli {
             return AresExitCode.DEPLOYMENT_FAILED.value();
         }
     }
+
+    private int invoke(List<String> arguments) {
+        String functionName = arguments.get(1);
+        try {
+            InvocationOptions options = invocationOptions(arguments);
+            LocalLambdaClient client =
+                    options.endpoint() == null ? lambdaClient : new LocalLambdaClient(options.endpoint());
+            LambdaInvocationResult result = client.invokeFunction(functionName, options.payload());
+            output.accept(new String(result.payload(), StandardCharsets.UTF_8));
+            if (result.functionError().isPresent()) {
+                error.accept("Lambda function '" + functionName + "' returned function error '"
+                        + result.functionError().orElseThrow()
+                        + "'");
+                return AresExitCode.FUNCTION_ERROR.value();
+            }
+            return AresExitCode.SUCCESS.value();
+        } catch (IllegalArgumentException exception) {
+            error.accept("Invalid invocation arguments for function '" + functionName + "': " + exception.getMessage());
+            return AresExitCode.USAGE_ERROR.value();
+        } catch (IOException exception) {
+            error.accept("Could not read invocation event for function '" + functionName
+                    + "'; check that the event path is readable: " + exception.getMessage());
+            return AresExitCode.USAGE_ERROR.value();
+        } catch (LambdaClientException exception) {
+            error.accept("Could not invoke Lambda function '" + functionName + "': " + exception.getMessage());
+            return isInfrastructureFailure(exception)
+                    ? AresExitCode.INFRASTRUCTURE_UNAVAILABLE.value()
+                    : AresExitCode.INTERNAL_ERROR.value();
+        } catch (RuntimeException exception) {
+            error.accept("Could not invoke Lambda function '" + functionName + "': " + exception.getMessage());
+            return AresExitCode.INTERNAL_ERROR.value();
+        }
+    }
+
+    private static InvocationOptions invocationOptions(List<String> arguments) throws IOException {
+        byte[] payload = "{}".getBytes(StandardCharsets.UTF_8);
+        URI endpoint = null;
+        boolean payloadProvided = false;
+        for (int index = 2; index < arguments.size(); index++) {
+            String option = arguments.get(index);
+            if ("--event".equals(option)) {
+                ensurePayloadNotProvided(payloadProvided);
+                payload = Files.readAllBytes(Path.of(optionValue(arguments, index, "--event")));
+                payloadProvided = true;
+                index++;
+            } else if ("--payload".equals(option)) {
+                ensurePayloadNotProvided(payloadProvided);
+                payload = optionValue(arguments, index, "--payload").getBytes(StandardCharsets.UTF_8);
+                payloadProvided = true;
+                index++;
+            } else if ("--endpoint".equals(option)) {
+                endpoint = URI.create(optionValue(arguments, index, "--endpoint"));
+                index++;
+            } else {
+                throw new IllegalArgumentException("unsupported option '" + option + "'");
+            }
+        }
+        return new InvocationOptions(payload, endpoint);
+    }
+
+    private static void ensurePayloadNotProvided(boolean payloadProvided) {
+        if (payloadProvided) {
+            throw new IllegalArgumentException("provide exactly one of --event or --payload");
+        }
+    }
+
+    private static String optionValue(List<String> arguments, int optionIndex, String option) {
+        if (optionIndex + 1 >= arguments.size()) {
+            throw new IllegalArgumentException(
+                    "--endpoint".equals(option)
+                            ? "--endpoint requires an HTTP URL"
+                            : "provide exactly one of --event or --payload");
+        }
+        return arguments.get(optionIndex + 1);
+    }
+
+    private static boolean isInfrastructureFailure(LambdaClientException exception) {
+        return exception.statusCode() == 0
+                || exception.statusCode() >= 500
+                || exception.errorCode().equals("ServiceException")
+                || exception.errorCode().equals("InternalFailure");
+    }
+
+    private record InvocationOptions(byte[] payload, URI endpoint) {}
 
     /** Starts the process entry point and preserves non-zero exit codes for scripts. */
     public static void main(String[] arguments) {

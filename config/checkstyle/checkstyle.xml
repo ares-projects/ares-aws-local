@@ -7,5 +7,9 @@
   </module>
   <module name="TreeWalker">
     <module name="AvoidStarImport"/>
+    <module name="RegexpSinglelineJava">
+      <property name="format" value="^(?!\s*(?:package|import)\b).*io\.github\.aresprojects\.local\.[A-Za-z0-9_.]+"/>
+      <property name="message" value="Use an import instead of an inline project type name."/>
+    </module>
   </module>
 </module>

@@ -25,6 +25,8 @@ Do not create commits unless explicitly requested. When asked to commit, follow 
 
 - Target Java 21.
 - Prefer immutable types and no wildcard imports.
+- Use imports for project types instead of fully-qualified names in expressions or
+  signatures; use a fully-qualified name only when it resolves a genuine name collision.
 - Do not introduce reflection when compile-time generation is possible.
 - Public APIs require tests and Javadoc.
 - When implementing AWS service behavior, use the authoritative AWS service and protocol
