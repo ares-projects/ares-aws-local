@@ -481,7 +481,7 @@ unzip -l ./examples/hello-lambda/build/ares/hello.zip
 
 ### M3 — Implement Lambda deployment and artifact storage
 
-- [ ] Complete M3.
+- [x] Complete M3.
 
 Work:
 
@@ -505,14 +505,17 @@ Acceptance:
 Verification:
 
 ```bash
-./gradlew :ares-aws-local-cli:installDist
-./gradlew :ares-aws-local-runtime:run
+./gradlew -g /tmp/ares-gradle-home :ares-aws-local-cli:installDist
+
+# In one terminal:
+ARES_AWS_LOCAL_PORT=4567 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares local start
 
 # In another terminal:
-./ares-aws-local-cli/build/install/ares-aws-local-cli/bin/ares \
-  deploy ./examples/hello-lambda
+ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4567 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares deploy ./examples/hello-lambda
 
-./gradlew formatCheck check
+./gradlew -g /tmp/ares-gradle-home formatCheck check
 ```
 
 ### M4 — Add the Docker/RIE Java execution backend
@@ -699,7 +702,7 @@ Add one row only after a milestone passes its verification gate.
 | M0 | 2026-07-23 | Working tree | `./gradlew formatCheck check` passed; ADR-0003 and architecture index added |
 | M1 | 2026-07-23 | Working tree | `./gradlew formatCheck check` passed; SPI and target module skeletons added |
 | M2 | 2026-07-27 | Working tree | `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed; installed `ares build` built `examples/hello-lambda`; ZIP listing and repeated SHA-256 were verified; `ares local start` health was verified on port 4567 |
-| M3 | — | — | Not started |
+| M3 | 2026-07-27 | Working tree | Lambda core/runtime/CLI tests passed; `installDist` completed; a live runtime accepted `ares deploy` twice and reported created then unchanged; `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed |
 | M4 | — | — | Not started |
 | M5 | — | — | Not started |
 | M6 | — | — | Not started |

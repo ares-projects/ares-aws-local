@@ -132,10 +132,14 @@ The supported HTTP surface is the smallest useful Lambda REST-JSON subset:
 - `GetFunction` and `GetFunctionConfiguration`;
 - `UpdateFunctionCode`;
 - `UpdateFunctionConfiguration`;
-- `DeleteFunction`; and
-- synchronous `Invoke`.
+- `DeleteFunction`.
 
-Unsupported fields and package types return explicit AWS-shaped errors.
+Unsupported fields and package types return explicit AWS-shaped errors. Synchronous
+`Invoke` is deferred until the execution backend exists. The local endpoint accepts
+signed or unsigned requests in this phase; SigV4 validation is deferred.
+
+M3 implements the control plane, process-local artifact storage, Java 21 ZIP deployment,
+and the `ares deploy` reconciliation flow. It does not execute the uploaded code yet.
 
 ### Runtime-provider registry
 
