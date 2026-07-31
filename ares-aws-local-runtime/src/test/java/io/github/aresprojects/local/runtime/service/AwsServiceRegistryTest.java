@@ -2,6 +2,7 @@ package io.github.aresprojects.local.runtime.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class AwsServiceRegistryTest {
@@ -117,11 +119,85 @@ class AwsServiceRegistryTest {
         assertEquals(204, responseStage.toCompletableFuture().join().statusCode());
     }
 
+    @Test
+    void closeClosesResourceAdaptersOnce() {
+        AtomicInteger closeCount = new AtomicInteger();
+        AwsServiceRegistry registry = AwsServiceRegistry.builder()
+                .register(closeableAdapter("lambda", closeCount::incrementAndGet))
+                .build();
+
+        registry.close();
+        registry.close();
+
+        assertEquals(1, closeCount.get());
+    }
+
+    @Test
+    void closeReportsAllAdapterFailures() {
+        Exception firstFailure = new Exception("first failure");
+        Exception secondFailure = new Exception("second failure");
+        AwsServiceRegistry registry = AwsServiceRegistry.builder()
+                .register(closeableAdapter("first", () -> {
+                    throw firstFailure;
+                }))
+                .register(closeableAdapter("second", () -> {
+                    throw secondFailure;
+                }))
+                .build();
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, registry::close);
+
+        assertEquals("Could not close AWS service adapter 'first'", failure.getMessage());
+        assertSame(firstFailure, failure.getCause());
+        assertEquals(1, failure.getSuppressed().length);
+        assertEquals("Could not close AWS service adapter 'second'", failure.getSuppressed()[0].getMessage());
+        assertSame(secondFailure, failure.getSuppressed()[0].getCause());
+    }
+
     private static AwsServiceAdapter adapter(String name, boolean supports, AwsHttpResponse response) {
         AwsServiceAdapter adapter = mock();
         when(adapter.serviceName()).thenReturn(name);
         when(adapter.supports(any())).thenReturn(supports);
         when(adapter.handle(any())).thenReturn(CompletableFuture.completedFuture(response));
         return adapter;
+    }
+
+    private static AwsServiceAdapter closeableAdapter(String name, ThrowingRunnable closeAction) {
+        return new CloseableAdapter(name, closeAction);
+    }
+
+    private static final class CloseableAdapter implements AwsServiceAdapter, AutoCloseable {
+        private final String name;
+        private final ThrowingRunnable closeAction;
+
+        private CloseableAdapter(String name, ThrowingRunnable closeAction) {
+            this.name = name;
+            this.closeAction = closeAction;
+        }
+
+        @Override
+        public String serviceName() {
+            return name;
+        }
+
+        @Override
+        public boolean supports(AwsRequestContext request) {
+            return false;
+        }
+
+        @Override
+        public CompletionStage<AwsHttpResponse> handle(AwsRequestContext request) {
+            return CompletableFuture.completedFuture(AwsHttpResponse.of(200, new byte[0]));
+        }
+
+        @Override
+        public void close() throws Exception {
+            closeAction.run();
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

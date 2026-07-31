@@ -8,13 +8,14 @@ import java.util.Objects;
 /** Coordinates server lifecycle so callers do not depend on the transport implementation. */
 public final class LocalAwsServer implements AutoCloseable {
     private final NettyAwsHttpServer delegate;
+    private final AwsServiceRegistry registry;
     private State state = State.NEW;
     private InetSocketAddress localAddress;
 
     /** Creates a lifecycle owner with immutable configuration and a startup-built service registry. */
     public LocalAwsServer(LocalAwsServerConfig config, AwsServiceRegistry registry) {
-        delegate = new NettyAwsHttpServer(
-                Objects.requireNonNull(config, "config"), Objects.requireNonNull(registry, "registry"));
+        this.registry = Objects.requireNonNull(registry, "registry");
+        delegate = new NettyAwsHttpServer(Objects.requireNonNull(config, "config"), registry);
     }
 
     /** Binds before returning so callers can publish the actual endpoint, including an ephemeral port. */
@@ -53,8 +54,12 @@ public final class LocalAwsServer implements AutoCloseable {
         if (state == State.CLOSED) {
             return;
         }
-        delegate.close();
-        state = State.CLOSED;
+        try {
+            delegate.close();
+        } finally {
+            registry.close();
+            state = State.CLOSED;
+        }
     }
 
     private enum State {

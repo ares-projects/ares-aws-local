@@ -1,11 +1,13 @@
 package io.github.aresprojects.local.lambda;
 
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
 
 /** Implements the process-local Lambda control-plane operations supported by M3. */
@@ -29,6 +31,16 @@ public final class LambdaService implements AutoCloseable {
                 new InMemoryLambdaFunctionStore(),
                 new TemporaryLambdaArtifactStore(),
                 new NoOpLambdaExecutionBackend(),
+                Clock.systemUTC(),
+                DEFAULT_REGION);
+    }
+
+    /** Creates a process-local service using the supplied execution backend and default storage. */
+    public LambdaService(LambdaExecutionBackend executionBackend) {
+        this(
+                new InMemoryLambdaFunctionStore(),
+                new TemporaryLambdaArtifactStore(),
+                executionBackend,
                 Clock.systemUTC(),
                 DEFAULT_REGION);
     }
@@ -95,6 +107,12 @@ public final class LambdaService implements AutoCloseable {
     public LambdaFunctionSnapshot get(String functionName) {
         String requiredName = required(functionName, "functionName");
         return functionStore.find(requiredName).orElseThrow(() -> notFound(requiredName));
+    }
+
+    /** Invokes the active revision through the configured runtime-neutral execution backend. */
+    public CompletionStage<LambdaInvocationResult> invoke(String functionName, byte[] payload) {
+        Objects.requireNonNull(payload, "payload");
+        return executionBackend.invoke(get(functionName), payload);
     }
 
     /** Replaces code and preserves the previous active revision if staging fails. */
@@ -178,7 +196,11 @@ public final class LambdaService implements AutoCloseable {
     /** Releases process-local artifact storage owned by this service. */
     @Override
     public void close() {
-        artifactStore.close();
+        try {
+            executionBackend.close();
+        } finally {
+            artifactStore.close();
+        }
     }
 
     private LambdaFunctionSnapshot snapshot(
