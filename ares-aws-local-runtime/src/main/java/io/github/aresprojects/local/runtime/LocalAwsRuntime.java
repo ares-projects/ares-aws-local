@@ -1,6 +1,8 @@
 package io.github.aresprojects.local.runtime;
 
+import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
+import io.github.aresprojects.local.runtime.service.lambda.LambdaJsonAdapter;
 import io.github.aresprojects.local.runtime.service.sqs.InMemorySqsQueueStore;
 import io.github.aresprojects.local.runtime.service.sqs.SqsJsonAdapter;
 import java.net.InetSocketAddress;
@@ -44,6 +46,7 @@ public final class LocalAwsRuntime {
     static AwsServiceRegistry defaultRegistry() {
         return AwsServiceRegistry.builder()
                 .register(new SqsJsonAdapter(new InMemorySqsQueueStore()))
+                .register(new LambdaJsonAdapter(new LambdaService()))
                 .build();
     }
 }

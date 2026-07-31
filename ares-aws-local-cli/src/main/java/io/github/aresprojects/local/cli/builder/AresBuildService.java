@@ -5,6 +5,7 @@ import io.github.aresprojects.local.cli.AresConfigurationException;
 import io.github.aresprojects.local.cli.project.AresProject;
 import io.github.aresprojects.local.cli.project.AresProjectReader;
 import java.nio.file.Path;
+import java.util.Map;
 
 /** Builds one validated local Lambda project and emits its deployment metadata. */
 public final class AresBuildService {
@@ -56,7 +57,10 @@ public final class AresBuildService {
                 artifact,
                 metadata.sha256(),
                 metadata.sizeBytes(),
-                project.environmentNames());
+                project.environmentNames(),
+                project.function().environment() == null
+                        ? Map.of()
+                        : project.function().environment());
         resultWriter.write(project.deploymentPath(), result);
         return result;
     }

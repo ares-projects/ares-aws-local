@@ -31,3 +31,19 @@ service slice supports SQS `CreateQueue`, `SendMessage`, `ReceiveMessage`, and
 `DeleteMessage` through AWS JSON 1.0. Visibility timeouts are supported for received
 messages; long polling, AWS Query/XML support, and authentication validation remain future
 work.
+
+## Deploy a local Lambda
+
+The Ares CLI builds and deploys a function from its project directory:
+
+```bash
+./ares-aws-local-cli/build/install/ares/bin/ares build ./examples/hello-lambda
+ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares deploy ./examples/hello-lambda
+```
+
+`ares deploy` derives the runtime, architecture, handler, environment, and ZIP artifact
+from `ares.yaml` and reconciles the function through the local Lambda REST-JSON API. The
+first deployment supports Java 21 ZIP packages; function invocation and Docker/RIE
+execution are later milestones. Function state and artifacts are process-local, and the
+local endpoint does not validate AWS authentication yet.
