@@ -4,11 +4,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.sun.net.httpserver.HttpServer;
 import io.github.aresprojects.local.cli.builder.AresBuildService;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService.DeploymentOutcome;
+import io.github.aresprojects.local.cli.deploy.LambdaClientException;
+import io.github.aresprojects.local.cli.deploy.LocalLambdaClient;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class AresCliTest {
-
     @Test
     void rejectsUnknownCommandsWithUsageExitCode() {
         List<String> errors = new ArrayList<>();
@@ -124,6 +131,129 @@ class AresCliTest {
         assertEquals(2, AresExitCode.USAGE_ERROR.value());
         assertEquals(3, AresExitCode.RUNTIME_UNAVAILABLE.value());
         assertEquals(4, AresExitCode.BUILD_FAILED.value());
+    }
+
+    @Test
+    void invokesFunctionAndWritesOnlyThePayloadToOutput() throws Exception {
+        List<String> output = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        LocalLambdaClient client = mock(LocalLambdaClient.class);
+        when(client.invokeFunction("hello", "{}".getBytes(StandardCharsets.UTF_8)))
+                .thenReturn(LambdaInvocationResult.success("{\"message\":\"Hello\"}".getBytes(StandardCharsets.UTF_8)));
+        AresCli cli = new AresCli(output::add, errors::add, new AresBuildService(), mock(), client, () -> {});
+
+        int exitCode = cli.execute("invoke", "hello");
+
+        assertEquals(AresExitCode.SUCCESS.value(), exitCode);
+        assertEquals(List.of("{\"message\":\"Hello\"}"), output);
+        assertEquals(List.of(), errors);
+    }
+
+    @Test
+    void preservesFunctionErrorsAndUsesTheFunctionErrorExitCode() throws Exception {
+        List<String> output = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        LocalLambdaClient client = mock(LocalLambdaClient.class);
+        when(client.invokeFunction("hello", "{\"name\":\"Ada\"}".getBytes(StandardCharsets.UTF_8)))
+                .thenReturn(LambdaInvocationResult.functionError(
+                        "{\"errorMessage\":\"failed\"}".getBytes(StandardCharsets.UTF_8), "Unhandled"));
+        AresCli cli = new AresCli(output::add, errors::add, new AresBuildService(), mock(), client, () -> {});
+
+        int exitCode = cli.execute("invoke", "hello", "--payload", "{\"name\":\"Ada\"}");
+
+        assertEquals(AresExitCode.FUNCTION_ERROR.value(), exitCode);
+        assertEquals(List.of("{\"errorMessage\":\"failed\"}"), output);
+        assertEquals(List.of("Lambda function 'hello' returned function error 'Unhandled'"), errors);
+    }
+
+    @Test
+    void mapsInvalidInvocationAndInfrastructureFailures() throws Exception {
+        List<String> errors = new ArrayList<>();
+        LocalLambdaClient client = mock(LocalLambdaClient.class);
+        when(client.invokeFunction("hello", "{}".getBytes(StandardCharsets.UTF_8)))
+                .thenThrow(new LambdaClientException("LocalEndpointUnavailable", 0, "endpoint unavailable"));
+        AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService(), mock(), client, () -> {});
+
+        assertEquals(AresExitCode.USAGE_ERROR.value(), cli.execute("invoke", "hello", "--event"));
+        assertEquals(AresExitCode.INFRASTRUCTURE_UNAVAILABLE.value(), cli.execute("invoke", "hello"));
+        assertEquals(2, AresExitCode.USAGE_ERROR.value());
+        assertEquals(6, AresExitCode.FUNCTION_ERROR.value());
+        assertEquals(7, AresExitCode.INFRASTRUCTURE_UNAVAILABLE.value());
+    }
+
+    @Test
+    void readsEventFilesAndRejectsMalformedInvocationOptions(@TempDir Path directory) throws Exception {
+        Path event = directory.resolve("event.json");
+        Files.writeString(event, "{\"name\":\"Ada\"}");
+        LocalLambdaClient client = mock(LocalLambdaClient.class);
+        when(client.invokeFunction("hello", "{\"name\":\"Ada\"}".getBytes(StandardCharsets.UTF_8)))
+                .thenReturn(LambdaInvocationResult.success("{}".getBytes(StandardCharsets.UTF_8)));
+        List<String> errors = new ArrayList<>();
+        AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService(), mock(), client, () -> {});
+
+        assertEquals(0, cli.execute("invoke", "hello", "--event", event.toString()));
+        verify(client).invokeFunction("hello", "{\"name\":\"Ada\"}".getBytes(StandardCharsets.UTF_8));
+        assertEquals(
+                2,
+                cli.execute(
+                        "invoke",
+                        "hello",
+                        "--event",
+                        directory.resolve("missing.json").toString()));
+        assertEquals(2, cli.execute("invoke", "hello", "--payload", "{}", "--event", event.toString()));
+        assertEquals(2, cli.execute("invoke", "hello", "--event", event.toString(), "--payload", "{}"));
+        assertEquals(2, cli.execute("invoke", "hello", "--endpoint"));
+        assertEquals(2, cli.execute("invoke", "hello", "--endpoint", "http://[invalid"));
+        assertEquals(2, cli.execute("invoke", "hello", "--unknown"));
+        assertEquals(6, errors.size());
+    }
+
+    @Test
+    void invokesThroughAnExplicitEndpoint() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/2015-03-31/functions/hello/invocations", exchange -> {
+            byte[] response = "{\"message\":\"Hello\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            try (OutputStream output = exchange.getResponseBody()) {
+                output.write(response);
+            }
+        });
+        server.start();
+        try {
+            List<String> output = new ArrayList<>();
+            AresCli cli = new AresCli(output::add, message -> {}, new AresBuildService(), mock(), mock(), () -> {});
+
+            assertEquals(
+                    0,
+                    cli.execute(
+                            "invoke",
+                            "hello",
+                            "--endpoint",
+                            "http://127.0.0.1:" + server.getAddress().getPort()));
+            assertEquals(List.of("{\"message\":\"Hello\"}"), output);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void mapsRemoteAndUnexpectedInvocationFailures() throws Exception {
+        List<String> errors = new ArrayList<>();
+        LocalLambdaClient remoteFailure = mock(LocalLambdaClient.class);
+        when(remoteFailure.invokeFunction("hello", "{}".getBytes(StandardCharsets.UTF_8)))
+                .thenThrow(new LambdaClientException("BadRequest", 400, "bad request"))
+                .thenThrow(new LambdaClientException("ServiceException", 400, "service unavailable"))
+                .thenThrow(new LambdaClientException("InternalFailure", 400, "internal failure"))
+                .thenThrow(new LambdaClientException("ServerFailure", 500, "server failure"))
+                .thenThrow(new IllegalStateException("unexpected failure"));
+        AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService(), mock(), remoteFailure, () -> {});
+
+        assertEquals(1, cli.execute("invoke", "hello"));
+        assertEquals(7, cli.execute("invoke", "hello"));
+        assertEquals(7, cli.execute("invoke", "hello"));
+        assertEquals(7, cli.execute("invoke", "hello"));
+        assertEquals(1, cli.execute("invoke", "hello"));
+        assertEquals(5, errors.size());
     }
 
     private static void writeProject(Path directory, boolean validZip) throws Exception {

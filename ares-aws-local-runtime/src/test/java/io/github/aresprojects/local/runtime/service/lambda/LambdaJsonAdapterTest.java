@@ -1,13 +1,17 @@
 package io.github.aresprojects.local.runtime.service.lambda;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aresprojects.local.lambda.InMemoryLambdaFunctionStore;
+import io.github.aresprojects.local.lambda.LambdaExecutionBackend;
+import io.github.aresprojects.local.lambda.LambdaFunctionSnapshot;
 import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.lambda.TemporaryLambdaArtifactStore;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -17,6 +21,7 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
@@ -33,6 +38,7 @@ class LambdaJsonAdapterTest {
             assertTrue(adapter.supports(request("POST", "/2015-03-31/functions", "{}")));
             assertTrue(adapter.supports(request("GET", "/2015-03-31/functions/hello/", "{}")));
             assertTrue(adapter.supports(request("PUT", "/2015-03-31/functions/hello/configuration", "{}")));
+            assertTrue(adapter.supports(request("POST", "/2015-03-31/functions/hello/invocations", "{}")));
             assertFalse(adapter.supports(request("GET", "/", "{}")));
             assertFalse(adapter.supports(request("POST", "/2015-03-31/functions/hello", "{}")));
             assertFalse(adapter.supports(request("GET", "/2015-03-31/functions/hello/code", "{}")));
@@ -140,11 +146,70 @@ class LambdaJsonAdapterTest {
         }
     }
 
+    @Test
+    void invokesRawPayloadAndPreservesFunctionErrors(@TempDir Path directory) throws Exception {
+        byte[] responsePayload = "{\"message\":\"failed\"}".getBytes(StandardCharsets.UTF_8);
+        LambdaExecutionBackend backend = new LambdaExecutionBackend() {
+            @Override
+            public CompletableFuture<LambdaInvocationResult> invoke(LambdaFunctionSnapshot function, byte[] payload) {
+                assertArrayEquals("{\"name\":\"Ada\"}".getBytes(StandardCharsets.UTF_8), payload);
+                return CompletableFuture.completedFuture(
+                        LambdaInvocationResult.functionError(responsePayload, "Unhandled"));
+            }
+
+            @Override
+            public void invalidate(String functionName, String revisionId) {}
+        };
+        try (LambdaService service = service(directory, backend)) {
+            LambdaJsonAdapter adapter = new LambdaJsonAdapter(service);
+            String code = Base64.getEncoder().encodeToString(zip("handler.class"));
+            adapter.handle(request(
+                            "POST",
+                            "/2015-03-31/functions",
+                            "{" + "\"FunctionName\":\"hello\",\"Runtime\":\"java21\","
+                                    + "\"Architectures\":[\"arm64\"],\"Handler\":\"Handler\","
+                                    + "\"Role\":\"role\",\"Code\":{\"ZipFile\":\""
+                                    + code
+                                    + "\"}}"))
+                    .toCompletableFuture()
+                    .join();
+
+            var response = adapter.handle(
+                            request("POST", "/2015-03-31/functions/hello/invocations", "{\"name\":\"Ada\"}"))
+                    .toCompletableFuture()
+                    .join();
+
+            assertEquals(200, response.statusCode());
+            assertEquals(
+                    "Unhandled", response.headers().get("x-amz-function-error").getFirst());
+            assertEquals(
+                    "$LATEST", response.headers().get("x-amz-executed-version").getFirst());
+            assertArrayEquals(responsePayload, response.body());
+        }
+    }
+
+    @Test
+    void returnsNotFoundForInvokingMissingFunction(@TempDir Path directory) {
+        try (LambdaService service = service(directory)) {
+            LambdaJsonAdapter adapter = new LambdaJsonAdapter(service);
+
+            var response = adapter.handle(request("POST", "/2015-03-31/functions/missing/invocations", "{}"))
+                    .toCompletableFuture()
+                    .join();
+
+            assertEquals(404, response.statusCode());
+        }
+    }
+
     private static LambdaService service(Path directory) {
+        return service(directory, (function, revision) -> {});
+    }
+
+    private static LambdaService service(Path directory, LambdaExecutionBackend backend) {
         return new LambdaService(
                 new InMemoryLambdaFunctionStore(),
                 new TemporaryLambdaArtifactStore(directory.resolve("artifacts")),
-                (function, revision) -> {},
+                backend,
                 Clock.fixed(Instant.parse("2026-07-27T00:00:00Z"), ZoneOffset.UTC),
                 "us-east-1");
     }

@@ -520,7 +520,7 @@ ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4567 \
 
 ### M4 — Add the Docker/RIE Java execution backend
 
-- [ ] Complete M4.
+- [x] Complete M4.
 
 Work:
 
@@ -553,7 +553,7 @@ docker version
 
 ### M5 — Implement Invoke and the CLI end-to-end flow
 
-- [ ] Complete M5.
+- [x] Complete M5.
 
 Work:
 
@@ -585,14 +585,14 @@ Verification:
 Manual smoke test:
 
 ```bash
-./ares-aws-local-cli/build/install/ares-aws-local-cli/bin/ares local start
+./ares-aws-local-cli/build/install/ares/bin/ares local start
 
 # In another terminal:
-./ares-aws-local-cli/build/install/ares-aws-local-cli/bin/ares \
+./ares-aws-local-cli/build/install/ares/bin/ares \
   build ./examples/hello-lambda
-./ares-aws-local-cli/build/install/ares-aws-local-cli/bin/ares \
+./ares-aws-local-cli/build/install/ares/bin/ares \
   deploy ./examples/hello-lambda
-./ares-aws-local-cli/build/install/ares-aws-local-cli/bin/ares \
+./ares-aws-local-cli/build/install/ares/bin/ares \
   invoke hello --event ./examples/hello-lambda/event.json
 ```
 
@@ -703,8 +703,8 @@ Add one row only after a milestone passes its verification gate.
 | M1 | 2026-07-23 | Working tree | `./gradlew formatCheck check` passed; SPI and target module skeletons added |
 | M2 | 2026-07-27 | Working tree | `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed; installed `ares build` built `examples/hello-lambda`; ZIP listing and repeated SHA-256 were verified; `ares local start` health was verified on port 4567 |
 | M3 | 2026-07-27 | Working tree | Lambda core/runtime/CLI tests passed; `installDist` completed; a live runtime accepted `ares deploy` twice and reported created then unchanged; `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed |
-| M4 | — | — | Not started |
-| M5 | — | — | Not started |
+| M4 | 2026-07-31 | Working tree | Docker/RIE backend tests passed; warm reuse, invalidation, failure classification, and cleanup are covered; the Docker-backed E2E gate passed |
+| M5 | 2026-07-31 | Working tree | Installed CLI black-box flow built, deployed, redeployed unchanged, and invoked the Java 21 fixture from an external working directory; raw HTTP and AWS SDK v2 Invoke tests passed; Docker/RIE cleanup was verified |
 | M6 | — | — | Not started |
 
 ## Authoritative references

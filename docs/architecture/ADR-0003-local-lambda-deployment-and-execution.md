@@ -1,7 +1,7 @@
 ---
 id: ADR-0003
 title: Local Lambda deployment and execution
-status: Proposed
+status: Accepted
 date: 2026-07-23
 owners:
   - Ares AWS Local maintainers
@@ -132,14 +132,19 @@ The supported HTTP surface is the smallest useful Lambda REST-JSON subset:
 - `GetFunction` and `GetFunctionConfiguration`;
 - `UpdateFunctionCode`;
 - `UpdateFunctionConfiguration`;
-- `DeleteFunction`.
+- `DeleteFunction`; and
+- synchronous `Invoke`.
 
 Unsupported fields and package types return explicit AWS-shaped errors. Synchronous
-`Invoke` is deferred until the execution backend exists. The local endpoint accepts
-signed or unsigned requests in this phase; SigV4 validation is deferred.
+`Invoke` accepts raw request bytes and returns the raw function payload. Function errors
+remain distinct from transport and infrastructure failures through the
+`LambdaInvocationResult` boundary. The local endpoint accepts signed or unsigned requests
+in this phase; SigV4 validation is deferred.
 
 M3 implements the control plane, process-local artifact storage, Java 21 ZIP deployment,
-and the `ares deploy` reconciliation flow. It does not execute the uploaded code yet.
+and the `ares deploy` reconciliation flow. M4 adds the Docker/RIE execution backend, and
+M5 adds the synchronous Invoke route, `ares invoke`, and the installed-CLI end-to-end
+workflow.
 
 ### Runtime-provider registry
 

@@ -14,7 +14,9 @@ import io.github.aresprojects.local.cli.builder.DeploymentResult;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -114,6 +116,38 @@ class LocalLambdaClientTest {
                 new LocalLambdaClient(URI.create("http://127.0.0.1:4566/")).endpointDescription());
     }
 
+    @Test
+    void invokesRawPayloadAndPreservesFunctionErrorHeader() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        doReturn(response(
+                        200,
+                        "{\"errorMessage\":\"failed\"}",
+                        HttpHeaders.of(Map.of("x-amz-function-error", List.of("Unhandled")), (name, value) -> true)))
+                .when(httpClient)
+                .send(any(), any());
+        LocalLambdaClient client = client(httpClient);
+
+        var result = client.invokeFunction("hello", "{\"name\":\"Ada\"}".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("Unhandled", result.functionError().orElseThrow());
+        assertEquals("{\"errorMessage\":\"failed\"}", new String(result.payload(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void mapsBadInvokeResponsesToAwsClientErrors() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        doReturn(response(400, "{\"__type\":\"InvalidRequest\",\"message\":\"bad payload\"}"))
+                .when(httpClient)
+                .send(any(), any());
+
+        LambdaClientException exception = assertThrows(
+                LambdaClientException.class,
+                () -> client(httpClient).invokeFunction("hello", "{}".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("InvalidRequest", exception.errorCode());
+        assertEquals(400, exception.statusCode());
+    }
+
     private static LocalLambdaClient client(HttpClient httpClient) {
         return new LocalLambdaClient(
                 URI.create("http://127.0.0.1:4566"), httpClient, new com.fasterxml.jackson.databind.ObjectMapper());
@@ -135,9 +169,14 @@ class LocalLambdaClientTest {
     }
 
     private static HttpResponse<byte[]> response(int status, String body) {
+        return response(status, body, HttpHeaders.of(Map.of(), (name, value) -> true));
+    }
+
+    private static HttpResponse<byte[]> response(int status, String body, HttpHeaders headers) {
         HttpResponse<byte[]> response = mock(HttpResponse.class);
         when(response.statusCode()).thenReturn(status);
         when(response.body()).thenReturn(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(response.headers()).thenReturn(headers);
         return response;
     }
 

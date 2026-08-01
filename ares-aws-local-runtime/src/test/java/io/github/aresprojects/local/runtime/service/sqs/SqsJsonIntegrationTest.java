@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aresprojects.local.runtime.LocalAwsServer;
 import io.github.aresprojects.local.runtime.LocalAwsServerConfig;
+import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import io.github.aresprojects.local.runtime.trigger.AwsResourceReference;
 import io.github.aresprojects.local.runtime.trigger.TriggerEngine;
 import io.github.aresprojects.local.runtime.trigger.TriggerMapping;
@@ -228,9 +229,7 @@ class SqsJsonIntegrationTest {
     private static LocalAwsServer server(InMemorySqsQueueStore store) {
         return new LocalAwsServer(
                 new LocalAwsServerConfig("127.0.0.1", 0, 1024 * 1024),
-                io.github.aresprojects.local.runtime.service.AwsServiceRegistry.builder()
-                        .register(new SqsJsonAdapter(store))
-                        .build());
+                AwsServiceRegistry.builder().register(new SqsJsonAdapter(store)).build());
     }
 
     private static SqsClient sdkClient(URI endpoint) {
