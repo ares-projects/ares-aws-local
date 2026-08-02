@@ -598,13 +598,16 @@ Manual smoke test:
 
 ### M6 — Wire deployed functions to the existing trigger boundary and document delivery
 
-- [ ] Complete M6.
+- [x] Complete M6.
 
 Work:
 
-- Ensure the default runtime gives the trigger engine the production Lambda invoker.
+- Make `LambdaService` the production implementation of the existing `LambdaInvoker`
+  boundary.
+- Compose one SQS store and one Lambda service into the default runtime, and manage the
+  trigger engine lifecycle with the HTTP server lifecycle.
 - Add an integration test proving an existing programmatic SQS mapping can target a
-  function deployed through the Lambda control plane.
+  function deployed through the Lambda control plane and receive the deployed revision.
 - Update README with installation, prerequisites, command examples, Docker ownership,
   limitations, and troubleshooting.
 - Update ADR status and implementation links without rewriting accepted history.
@@ -614,12 +617,14 @@ Acceptance:
 - Manual invocation and SQS-triggered invocation use the same deployed function revision
   and execution backend.
 - Trigger failure behavior remains at least once and follows ADR-0002.
+- Runtime shutdown stops trigger delivery before releasing Lambda execution resources.
 - No dynamic event-source mapping API is introduced accidentally.
 - Documentation identifies Java 21 and Docker as current requirements.
 
 Verification:
 
 ```bash
+./gradlew :ares-aws-local-runtime:test
 ./gradlew formatCheck check
 npm run commitlint -- --help
 git diff --check
@@ -705,7 +710,7 @@ Add one row only after a milestone passes its verification gate.
 | M3 | 2026-07-27 | Working tree | Lambda core/runtime/CLI tests passed; `installDist` completed; a live runtime accepted `ares deploy` twice and reported created then unchanged; `./gradlew -g /tmp/ares-gradle-home formatCheck check` passed |
 | M4 | 2026-07-31 | Working tree | Docker/RIE backend tests passed; warm reuse, invalidation, failure classification, and cleanup are covered; the Docker-backed E2E gate passed |
 | M5 | 2026-07-31 | Working tree | Installed CLI black-box flow built, deployed, redeployed unchanged, and invoked the Java 21 fixture from an external working directory; raw HTTP and AWS SDK v2 Invoke tests passed; Docker/RIE cleanup was verified |
-| M6 | — | — | Not started |
+| M6 | 2026-08-01 | Working tree | Shared Lambda/SQS runtime composition, lifecycle-managed trigger engine, and deployed-function SQS integration passed; `./gradlew formatCheck check` passed |
 
 ## Authoritative references
 

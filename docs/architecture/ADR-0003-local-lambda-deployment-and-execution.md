@@ -144,7 +144,8 @@ in this phase; SigV4 validation is deferred.
 M3 implements the control plane, process-local artifact storage, Java 21 ZIP deployment,
 and the `ares deploy` reconciliation flow. M4 adds the Docker/RIE execution backend, and
 M5 adds the synchronous Invoke route, `ares invoke`, and the installed-CLI end-to-end
-workflow.
+workflow. M6 wires the deployed Lambda service into the existing SQS trigger engine and
+coordinates both lifecycles from the local runtime composition root.
 
 ### Runtime-provider registry
 
@@ -186,6 +187,12 @@ backend returns successful payloads, function errors, and infrastructure failure
 distinct outcomes. The trigger engine remains responsible for acknowledgement and retry
 semantics; it does not know whether the target is running in a Java, Node.js, Go, or Rust
 container.
+
+The local runtime composes one SQS store and one Lambda service for both HTTP APIs and
+programmatic trigger mappings. `LambdaService` is the production `LambdaInvoker`, so a
+trigger resolves the current deployed function revision before using the configured
+execution backend. Trigger mappings remain startup configuration; dynamic event-source
+mapping APIs are not part of this slice.
 
 ## Alternatives considered
 

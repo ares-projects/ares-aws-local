@@ -56,3 +56,15 @@ ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
 The payload is written to standard output; diagnostics are written to standard error.
 Docker must be available for invocation. Function state and artifacts are process-local,
 and the local endpoint does not validate AWS authentication yet.
+
+## Connect SQS to a deployed Lambda
+
+The trigger engine can deliver SQS messages to functions deployed through the same local
+Lambda service. Trigger mappings are currently configured programmatically at startup; the
+AWS `CreateEventSourceMapping` API and a CLI mapping command are future work. The SQS
+driver uses the same raw-byte invocation boundary and execution backend as `ares invoke`.
+
+Delivery is at least once: successful Lambda results acknowledge the batch, while function
+or infrastructure failures leave messages leased until their visibility timeout expires.
+Standard SQS queues are supported; FIFO mappings, filtering, DLQs, and long polling remain
+out of scope.

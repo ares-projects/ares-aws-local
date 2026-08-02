@@ -6,7 +6,7 @@ import java.net.InetSocketAddress;
 import java.util.Objects;
 
 /** Coordinates server lifecycle so callers do not depend on the transport implementation. */
-public final class LocalAwsServer implements AutoCloseable {
+public final class LocalAwsServer implements AutoCloseable, LocalAwsRuntimeProcess {
     private final NettyAwsHttpServer delegate;
     private final AwsServiceRegistry registry;
     private State state = State.NEW;

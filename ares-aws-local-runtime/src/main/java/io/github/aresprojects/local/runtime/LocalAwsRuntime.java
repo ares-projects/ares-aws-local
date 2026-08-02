@@ -6,6 +6,9 @@ import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import io.github.aresprojects.local.runtime.service.lambda.LambdaJsonAdapter;
 import io.github.aresprojects.local.runtime.service.sqs.InMemorySqsQueueStore;
 import io.github.aresprojects.local.runtime.service.sqs.SqsJsonAdapter;
+import io.github.aresprojects.local.runtime.trigger.TriggerEngine;
+import io.github.aresprojects.local.runtime.trigger.TriggerRegistry;
+import io.github.aresprojects.local.runtime.trigger.sqs.SqsLambdaPollingDriver;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -22,7 +25,7 @@ public final class LocalAwsRuntime {
         LocalAwsServerConfig config = LocalAwsServerConfig.fromEnvironment(System.getenv());
         run(
                 config,
-                () -> new LocalAwsServer(config, defaultRegistry()),
+                () -> defaultApplication(config),
                 Runtime.getRuntime()::addShutdownHook,
                 new CountDownLatch(1),
                 address -> LOGGER.log(System.Logger.Level.INFO, "Ares AWS Local listening on {0}", address));
@@ -30,24 +33,37 @@ public final class LocalAwsRuntime {
 
     static void run(
             LocalAwsServerConfig config,
-            Supplier<LocalAwsServer> serverFactory,
+            Supplier<? extends LocalAwsRuntimeProcess> processFactory,
             Consumer<Thread> shutdownHookRegistrar,
             CountDownLatch shutdown,
             Consumer<InetSocketAddress> startupLogger) {
-        LocalAwsServer server = serverFactory.get();
+        LocalAwsRuntimeProcess process = processFactory.get();
         shutdownHookRegistrar.accept(new Thread(
                 () -> {
                     shutdown.countDown();
-                    server.close();
+                    process.close();
                 },
                 "ares-aws-local-shutdown"));
-        try (server) {
-            InetSocketAddress address = server.start();
+        try (process) {
+            InetSocketAddress address = process.start();
             startupLogger.accept(address);
             shutdown.await();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static LocalAwsRuntimeApplication defaultApplication(LocalAwsServerConfig config) {
+        InMemorySqsQueueStore queueStore = new InMemorySqsQueueStore();
+        LambdaService lambdaService = new LambdaService(new DockerLambdaExecutionBackend());
+        AwsServiceRegistry services = AwsServiceRegistry.builder()
+                .register(new SqsJsonAdapter(queueStore))
+                .register(new LambdaJsonAdapter(lambdaService))
+                .build();
+        TriggerRegistry triggers = TriggerRegistry.builder()
+                .registerPollingDriver(new SqsLambdaPollingDriver(queueStore, lambdaService))
+                .build();
+        return new LocalAwsRuntimeApplication(new LocalAwsServer(config, services), new TriggerEngine(triggers));
     }
 
     static AwsServiceRegistry defaultRegistry() {

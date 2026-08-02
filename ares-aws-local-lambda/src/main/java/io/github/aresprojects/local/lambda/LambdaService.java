@@ -1,6 +1,7 @@
 package io.github.aresprojects.local.lambda;
 
 import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvoker;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -11,7 +12,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
 
 /** Implements the process-local Lambda control-plane operations supported by M3. */
-public final class LambdaService implements AutoCloseable {
+public final class LambdaService implements AutoCloseable, LambdaInvoker {
     public static final String DEFAULT_REGION = "us-east-1";
     public static final String ACCOUNT_ID = "000000000000";
 
@@ -110,6 +111,7 @@ public final class LambdaService implements AutoCloseable {
     }
 
     /** Invokes the active revision through the configured runtime-neutral execution backend. */
+    @Override
     public CompletionStage<LambdaInvocationResult> invoke(String functionName, byte[] payload) {
         Objects.requireNonNull(payload, "payload");
         return executionBackend.invoke(get(functionName), payload);
