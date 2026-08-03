@@ -52,6 +52,11 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
     }
 
     @Override
+    public boolean deleteQueue(String queueUrl) {
+        return queues.remove(Objects.requireNonNull(queueUrl, "queueUrl")) != null;
+    }
+
+    @Override
     public Optional<SqsMessage> sendMessage(String queueUrl, String body) {
         QueueState queue = queues.get(queueUrl);
         if (queue == null) {

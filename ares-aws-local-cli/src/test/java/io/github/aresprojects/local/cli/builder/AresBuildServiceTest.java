@@ -121,7 +121,9 @@ class AresBuildServiceTest {
     private static void writeZip(Path artifact) throws Exception {
         Files.createDirectories(Objects.requireNonNull(artifact.getParent(), "artifact parent"));
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(artifact))) {
-            zip.putNextEntry(new ZipEntry("example/HelloHandler.class"));
+            ZipEntry entry = new ZipEntry("example/HelloHandler.class");
+            entry.setTime(0);
+            zip.putNextEntry(entry);
             zip.write(new byte[] {1, 2, 3});
             zip.closeEntry();
         }

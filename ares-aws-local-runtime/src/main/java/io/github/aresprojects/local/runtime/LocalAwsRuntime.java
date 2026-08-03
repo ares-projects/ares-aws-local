@@ -2,6 +2,7 @@ package io.github.aresprojects.local.runtime;
 
 import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.lambda.docker.DockerLambdaExecutionBackend;
+import io.github.aresprojects.local.runtime.cloudformation.LocalCloudFormationController;
 import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import io.github.aresprojects.local.runtime.service.lambda.LambdaJsonAdapter;
 import io.github.aresprojects.local.runtime.service.sqs.InMemorySqsQueueStore;
@@ -63,7 +64,9 @@ public final class LocalAwsRuntime {
         TriggerRegistry triggers = TriggerRegistry.builder()
                 .registerPollingDriver(new SqsLambdaPollingDriver(queueStore, lambdaService))
                 .build();
-        return new LocalAwsRuntimeApplication(new LocalAwsServer(config, services), new TriggerEngine(triggers));
+        return new LocalAwsRuntimeApplication(
+                new LocalAwsServer(config, services, new LocalCloudFormationController(queueStore)),
+                new TriggerEngine(triggers));
     }
 
     static AwsServiceRegistry defaultRegistry() {

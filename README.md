@@ -68,3 +68,26 @@ Delivery is at least once: successful Lambda results acknowledge the batch, whil
 or infrastructure failures leave messages leased until their visibility timeout expires.
 Standard SQS queues are supported; FIFO mappings, filtering, DLQs, and long polling remain
 out of scope.
+
+## Provision a CDK Cloud Assembly
+
+Synthesize a CDK application first, then point Ares at the generated assembly:
+
+```bash
+cdk synth
+ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares deploy ./cdk.out
+```
+
+The CLI detects `manifest.json`, selects the only stack, packages the assembly, and sends it
+to the local runtime. For multiple stacks, select an artifact explicitly:
+
+```bash
+ares deploy ./cdk.out --stack MyStack --parameter Environment=local
+```
+
+Use `--dry-run` to print the dependency plan without creating resources. The initial
+CloudFormation slice provisions `AWS::SQS::Queue`; unsupported resources are reported and
+skipped, dependent resources are blocked, and a partial deployment returns exit code `8`.
+Cloud Assembly state is process-local. Lambda assets, additional resource handlers, nested
+stacks, and CloudFormation-compatible stack APIs are future slices.

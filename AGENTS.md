@@ -27,6 +27,9 @@ Do not create commits unless explicitly requested. When asked to commit, follow 
 - Prefer immutable types and no wildcard imports.
 - Use imports for project types instead of fully-qualified names in expressions or
   signatures; use a fully-qualified name only when it resolves a genuine name collision.
+- Order Java declarations as constants, instance fields, constructors, public API methods,
+  and private helpers. Keep required or primary method parameters first, followed by related
+  options and context values.
 - Do not introduce reflection when compile-time generation is possible.
 - Public APIs require tests and Javadoc.
 - When implementing AWS service behavior, use the authoritative AWS service and protocol

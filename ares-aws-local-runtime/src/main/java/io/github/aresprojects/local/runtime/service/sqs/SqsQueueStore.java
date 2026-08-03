@@ -24,6 +24,9 @@ public interface SqsQueueStore {
      */
     Optional<SqsQueue> findQueue(String queueUrl);
 
+    /** Removes a queue when it exists; used by CloudFormation rollback and future deletion APIs. */
+    boolean deleteQueue(String queueUrl);
+
     /**
      * Appends a message to an existing queue.
      *

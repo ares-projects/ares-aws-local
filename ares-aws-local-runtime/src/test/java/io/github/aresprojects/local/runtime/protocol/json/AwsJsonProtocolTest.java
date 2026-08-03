@@ -118,9 +118,15 @@ class AwsJsonProtocolTest {
 
         assertThrows(NullPointerException.class, () -> AwsJsonTarget.parse(null));
         assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse(""));
-        assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse(".CreateQueue"));
-        assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse("AmazonSQS."));
-        assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse("AmazonSQS.Create.Queue"));
+        IllegalArgumentException missingService =
+                assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse(".CreateQueue"));
+        assertTrue(missingService.getMessage().startsWith("X-Amz-Target must use"));
+        IllegalArgumentException missingOperation =
+                assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse("AmazonSQS."));
+        assertTrue(missingOperation.getMessage().startsWith("X-Amz-Target must use"));
+        IllegalArgumentException extraSeparator =
+                assertThrows(IllegalArgumentException.class, () -> AwsJsonTarget.parse("AmazonSQS.Create.Queue"));
+        assertTrue(extraSeparator.getMessage().startsWith("X-Amz-Target must use"));
     }
 
     @Test

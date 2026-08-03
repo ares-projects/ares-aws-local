@@ -1,5 +1,7 @@
 package io.github.aresprojects.local.runtime;
 
+import io.github.aresprojects.local.runtime.cloudformation.LocalCloudFormationController;
+import io.github.aresprojects.local.runtime.http.AwsRequestHandler;
 import io.github.aresprojects.local.runtime.http.netty.NettyAwsHttpServer;
 import io.github.aresprojects.local.runtime.service.AwsServiceRegistry;
 import java.net.InetSocketAddress;
@@ -14,8 +16,19 @@ public final class LocalAwsServer implements AutoCloseable, LocalAwsRuntimeProce
 
     /** Creates a lifecycle owner with immutable configuration and a startup-built service registry. */
     public LocalAwsServer(LocalAwsServerConfig config, AwsServiceRegistry registry) {
+        this(config, registry, null);
+    }
+
+    /** Creates a server with optional Ares-local control-plane routes. */
+    public LocalAwsServer(
+            LocalAwsServerConfig config,
+            AwsServiceRegistry registry,
+            LocalCloudFormationController cloudFormationController) {
         this.registry = Objects.requireNonNull(registry, "registry");
-        delegate = new NettyAwsHttpServer(Objects.requireNonNull(config, "config"), registry);
+        AwsRequestHandler handler = cloudFormationController == null
+                ? registry
+                : new LocalRequestRouter(registry, cloudFormationController);
+        delegate = new NettyAwsHttpServer(Objects.requireNonNull(config, "config"), handler);
     }
 
     /** Binds before returning so callers can publish the actual endpoint, including an ephemeral port. */
