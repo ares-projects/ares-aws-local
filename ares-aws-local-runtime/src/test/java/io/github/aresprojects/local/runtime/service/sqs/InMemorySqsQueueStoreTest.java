@@ -25,6 +25,7 @@ class InMemorySqsQueueStoreTest {
         Optional<SqsMessage> message = store.sendMessage(url, "hello");
 
         assertEquals(first, second);
+        assertEquals(Optional.of(first), store.findQueueByName("orders"));
         assertTrue(message.isPresent());
         assertNotEquals("", message.orElseThrow().messageId());
         assertEquals("5d41402abc4b2a76b9719d911017c592", message.orElseThrow().md5OfMessageBody());

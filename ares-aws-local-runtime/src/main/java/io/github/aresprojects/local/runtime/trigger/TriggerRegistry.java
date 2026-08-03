@@ -47,6 +47,28 @@ public final class TriggerRegistry {
         return pushDrivers.get(driverId);
     }
 
+    void validateMapping(TriggerMapping mapping) {
+        TriggerMapping candidate = Objects.requireNonNull(mapping, "mapping");
+        PollingTriggerDriver pollingDriver = pollingDrivers.get(candidate.driverId());
+        PushTriggerDriver pushDriver = pushDrivers.get(candidate.driverId());
+        if (pollingDriver == null && pushDriver == null) {
+            throw new IllegalArgumentException("Trigger mapping '" + candidate.id() + "' references unknown driver '"
+                    + candidate.driverId() + "'; register that driver before building the registry");
+        }
+        Class<? extends TriggerSettings> settingsType =
+                pollingDriver == null ? pushDriver.settingsType() : pollingDriver.settingsType();
+        if (!settingsType.isInstance(candidate.settings())) {
+            throw new IllegalArgumentException("Trigger mapping '" + candidate.id() + "' uses settings type "
+                    + candidate.settings().getClass().getName() + " but driver '" + candidate.driverId()
+                    + "' requires " + settingsType.getName());
+        }
+        if (pollingDriver == null) {
+            pushDriver.validate(candidate);
+        } else {
+            pollingDriver.validate(candidate);
+        }
+    }
+
     /** Builds a validated registry while preserving mapping registration order. */
     public static final class Builder {
         private final List<TriggerMapping> mappings = new ArrayList<>();
@@ -107,29 +129,9 @@ public final class TriggerRegistry {
          * @return an immutable registry snapshot
          */
         public TriggerRegistry build() {
-            mappings.forEach(this::validateMapping);
-            return new TriggerRegistry(mappings, pollingDrivers, pushDrivers);
-        }
-
-        private void validateMapping(TriggerMapping mapping) {
-            PollingTriggerDriver pollingDriver = pollingDrivers.get(mapping.driverId());
-            PushTriggerDriver pushDriver = pushDrivers.get(mapping.driverId());
-            if (pollingDriver == null && pushDriver == null) {
-                throw new IllegalArgumentException("Trigger mapping '" + mapping.id() + "' references unknown driver '"
-                        + mapping.driverId() + "'; register that driver before building the registry");
-            }
-            Class<? extends TriggerSettings> settingsType =
-                    pollingDriver == null ? pushDriver.settingsType() : pollingDriver.settingsType();
-            if (!settingsType.isInstance(mapping.settings())) {
-                throw new IllegalArgumentException("Trigger mapping '" + mapping.id() + "' uses settings type "
-                        + mapping.settings().getClass().getName() + " but driver '" + mapping.driverId()
-                        + "' requires " + settingsType.getName());
-            }
-            if (pollingDriver == null) {
-                pushDriver.validate(mapping);
-            } else {
-                pollingDriver.validate(mapping);
-            }
+            TriggerRegistry registry = new TriggerRegistry(mappings, pollingDrivers, pushDrivers);
+            mappings.forEach(registry::validateMapping);
+            return registry;
         }
 
         private void rejectDuplicateDriver(String driverId) {

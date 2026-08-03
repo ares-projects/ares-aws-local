@@ -24,6 +24,14 @@ public interface SqsQueueStore {
      */
     Optional<SqsQueue> findQueue(String queueUrl);
 
+    /**
+     * Finds a queue by its case-sensitive local name.
+     *
+     * @param queueName the queue name from an SQS ARN
+     * @return the queue, or empty when it does not exist
+     */
+    Optional<SqsQueue> findQueueByName(String queueName);
+
     /** Removes a queue when it exists; used by CloudFormation rollback and future deletion APIs. */
     boolean deleteQueue(String queueUrl);
 

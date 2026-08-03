@@ -64,9 +64,11 @@ public final class LocalAwsRuntime {
         TriggerRegistry triggers = TriggerRegistry.builder()
                 .registerPollingDriver(new SqsLambdaPollingDriver(queueStore, lambdaService))
                 .build();
+        TriggerEngine triggerEngine = new TriggerEngine(triggers);
         return new LocalAwsRuntimeApplication(
-                new LocalAwsServer(config, services, new LocalCloudFormationController(queueStore, lambdaService)),
-                new TriggerEngine(triggers));
+                new LocalAwsServer(
+                        config, services, new LocalCloudFormationController(queueStore, lambdaService, triggerEngine)),
+                triggerEngine);
     }
 
     static AwsServiceRegistry defaultRegistry() {

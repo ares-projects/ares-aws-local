@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -274,6 +275,35 @@ class TriggerEngineTest {
             assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
+        }
+    }
+
+    @Test
+    void registersAndRemovesRuntimeMappingsWithoutChangingStartupRegistry() throws Exception {
+        AtomicInteger polls = new AtomicInteger();
+        PollingTriggerDriver driver = pollingDriver("poll", mapping -> {
+            polls.incrementAndGet();
+            return CompletableFuture.completedFuture(PollingTriggerResult.IDLE);
+        });
+        TriggerRegistry registry =
+                TriggerRegistry.builder().registerPollingDriver(driver).build();
+        TriggerEngine engine = engine(registry, diagnostic -> {}, Duration.ofMillis(10), Duration.ofSeconds(1));
+
+        try (engine) {
+            engine.start();
+            TriggerMapping mapping = mapping("runtime", "poll", true, 1);
+            engine.registerMapping(mapping);
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (polls.get() == 0 && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
+            assertTrue(polls.get() > 0);
+            assertEquals(mapping, engine.findMapping("runtime").orElseThrow());
+            assertThrows(IllegalArgumentException.class, () -> engine.registerMapping(mapping));
+
+            assertEquals(Optional.of(mapping), engine.removeMapping("runtime"));
+            assertTrue(engine.findMapping("runtime").isEmpty());
         }
     }
 

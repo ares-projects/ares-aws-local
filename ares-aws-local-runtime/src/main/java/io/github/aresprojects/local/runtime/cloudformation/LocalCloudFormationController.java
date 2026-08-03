@@ -26,6 +26,7 @@ import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import io.github.aresprojects.local.runtime.service.sqs.SqsQueueStore;
+import io.github.aresprojects.local.runtime.trigger.TriggerEngine;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,12 +61,18 @@ public final class LocalCloudFormationController {
     private final ConcurrentMap<String, ReentrantLock> stackLocks = new ConcurrentHashMap<>();
 
     public LocalCloudFormationController(SqsQueueStore queueStore) {
-        this(queueStore, null);
+        this(queueStore, null, null);
     }
 
     /** Creates a controller with SQS and the shared Lambda service resource handlers. */
     public LocalCloudFormationController(SqsQueueStore queueStore, LambdaService lambdaService) {
-        this(handlers(queueStore, lambdaService), new InMemoryStackStateStore());
+        this(queueStore, lambdaService, null);
+    }
+
+    /** Creates a controller with service handlers and the runtime trigger lifecycle. */
+    public LocalCloudFormationController(
+            SqsQueueStore queueStore, LambdaService lambdaService, TriggerEngine triggerEngine) {
+        this(handlers(queueStore, lambdaService, triggerEngine), new InMemoryStackStateStore());
     }
 
     LocalCloudFormationController(CloudFormationResourceHandlerRegistry handlers, StackStateStore stateStore) {
@@ -340,11 +347,14 @@ public final class LocalCloudFormationController {
     private record Bundle(Path assemblyRoot, String stackArtifactId, Map<String, String> parameters) {}
 
     private static CloudFormationResourceHandlerRegistry handlers(
-            SqsQueueStore queueStore, LambdaService lambdaService) {
+            SqsQueueStore queueStore, LambdaService lambdaService, TriggerEngine triggerEngine) {
         var builder = CloudFormationResourceHandlerRegistry.builder()
                 .register(new SqsQueueResourceHandler(Objects.requireNonNull(queueStore, "queueStore")));
         if (lambdaService != null) {
             builder.register(new LambdaFunctionResourceHandler(lambdaService));
+        }
+        if (lambdaService != null && triggerEngine != null) {
+            builder.register(new LambdaEventSourceMappingResourceHandler(queueStore, lambdaService, triggerEngine));
         }
         return builder.build();
     }

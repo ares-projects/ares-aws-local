@@ -39,10 +39,27 @@
     "aws:asset:property": "Code"
    }
   },
+  "FunctionSqsEventSourceCdkSqsLambdaStackQueue9ACE9A4682F06DCD": {
+   "Type": "AWS::Lambda::EventSourceMapping",
+   "Properties": {
+    "EventSourceArn": {
+     "Fn::GetAtt": [
+      "Queue4A7E3555",
+      "Arn"
+     ]
+    },
+    "FunctionName": {
+     "Ref": "Function76856677"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CdkSqsLambdaStack/Function/SqsEventSource:CdkSqsLambdaStackQueue9ACE9A46/Resource"
+   }
+  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zWMyw6CMBAAv8V7WaVNvIuJVyN8AFnKSsqjKLuVQ9N/N2A8zSSTjAZ9NnA64MqZbYdsdA3EStAOCleuI78Z4iNQIHV9+l2SGnFqWoR4C96Km/2W/p4UmxqZSRguGxQbKIIdSApkSqoknsNiSe21Euyc77bDPcgrSFJ+bgl6Pn60htxAfujZuWwJXtxEUP74BcXyDFa4AAAA"
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2WMSw6CQBBEz+J+aGVI3IvRnTHCAUgztGT4DEj3wIJwdwMaN67qpV6lNOhjBIcdThyYog4am8OcCppa4cTZzC+G+eHJkzo/3QaLarDNC4T56p0R27lV/fgykpO084OhG/a9deWq/9tFcZQhMwnDaQ3FEcTe1CQxMi0qId72arOpYPn9unvpvSzKdQVBxftRawgjCHcVWxsM3oltCZJPvgGan+NX4QAAAA=="
    },
    "Metadata": {
     "aws:cdk:path": "CdkSqsLambdaStack/CDKMetadata/Default"
