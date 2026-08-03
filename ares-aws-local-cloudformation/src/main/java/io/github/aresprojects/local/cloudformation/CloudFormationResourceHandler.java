@@ -1,6 +1,7 @@
 package io.github.aresprojects.local.cloudformation;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Optional;
 
 /** Implements CloudFormation lifecycle behavior for one resource type. */
 public interface CloudFormationResourceHandler {
@@ -14,7 +15,7 @@ public interface CloudFormationResourceHandler {
     ProvisionedResource create(ResourceOperationContext context, TemplateResource resource, JsonNode properties);
 
     /** Reads the current local resource state, or returns empty when it no longer exists. */
-    java.util.Optional<ProvisionedResource> read(ResourceOperationContext context, ProvisionedResource resource);
+    Optional<ProvisionedResource> read(ResourceOperationContext context, ProvisionedResource resource);
 
     /** Updates a resource; unsupported updates must throw an actionable exception. */
     ProvisionedResource update(

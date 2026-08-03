@@ -13,8 +13,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,15 +62,14 @@ public final class CloudAssemblyDeploymentService {
         try {
             HttpRequest request = HttpRequest.newBuilder(target)
                     .header("content-type", "application/zip")
-                    .timeout(java.time.Duration.ofMinutes(5))
+                    .timeout(Duration.ofMinutes(5))
                     .POST(HttpRequest.BodyPublishers.ofByteArray(bundle))
                     .build();
             HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
             JsonNode body = mapper.readTree(response.body());
             if (response.statusCode() >= 400) {
                 throw new AresDeploymentException("Cloud Assembly endpoint rejected the deployment: "
-                        + body.path("error")
-                                .asText(new String(response.body(), java.nio.charset.StandardCharsets.UTF_8)));
+                        + body.path("error").asText(new String(response.body(), StandardCharsets.UTF_8)));
             }
             return new DeploymentOutcome(body.path("status").asText("UNKNOWN"), body);
         } catch (IOException exception) {

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -199,7 +200,7 @@ public final class TemplateExpressionResolver {
                 && value.get(0).isTextual()
                 && value.get(1).isObject()) {
             template = value.get(0).textValue();
-            Map<String, JsonNode> supplied = new java.util.LinkedHashMap<>();
+            Map<String, JsonNode> supplied = new LinkedHashMap<>();
             value.get(1)
                     .fields()
                     .forEachRemaining(entry -> supplied.put(entry.getKey(), resolve(entry.getValue(), context)));
@@ -239,8 +240,7 @@ public final class TemplateExpressionResolver {
         }
         String source = scalarText(resolve(value.get(1), context), "Fn::Split source");
         ArrayNode result = JsonNodeFactory.instance.arrayNode();
-        for (String part :
-                source.split(java.util.regex.Pattern.quote(value.get(0).textValue()), -1)) {
+        for (String part : source.split(Pattern.quote(value.get(0).textValue()), -1)) {
             result.add(part);
         }
         return result;

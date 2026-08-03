@@ -16,11 +16,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /** Provisions the local subset of {@code AWS::SQS::Queue}. */
 public final class SqsQueueResourceHandler implements CloudFormationResourceHandler {
     private static final int MAX_QUEUE_NAME_LENGTH = 80;
-    private static final java.util.regex.Pattern QUEUE_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,80}");
+    private static final Pattern QUEUE_NAME = Pattern.compile("[A-Za-z0-9_-]{1,80}");
     private final SqsQueueStore store;
 
     public SqsQueueResourceHandler(SqsQueueStore store) {
@@ -36,38 +37,6 @@ public final class SqsQueueResourceHandler implements CloudFormationResourceHand
     public void validate(ResourceOperationContext context, TemplateResource resource, JsonNode properties) {
         validateSupportedProperties(properties);
         validateQueueName(properties.path("QueueName"));
-    }
-
-    private static void validateSupportedProperties(JsonNode properties) {
-        Iterator<String> fields = properties.fieldNames();
-        while (fields.hasNext()) {
-            String field = fields.next();
-            if (!"QueueName".equals(field)) {
-                throw new CloudFormationException("AWS::SQS::Queue property '" + field
-                        + "' is not supported locally yet; remove it or wait for the SQS property slice");
-            }
-        }
-    }
-
-    private static void validateQueueName(JsonNode name) {
-        if (name.isMissingNode() || name.isObject()) {
-            return;
-        }
-        if (!name.isTextual()) {
-            throw new CloudFormationException("AWS::SQS::Queue QueueName must resolve to a string");
-        }
-        validateQueueNameText(name.textValue());
-    }
-
-    private static void validateQueueNameText(String name) {
-        if (name.isBlank()) {
-            throw new CloudFormationException("AWS::SQS::Queue QueueName must resolve to a non-blank string");
-        }
-        if (!QUEUE_NAME.matcher(name).matches()) {
-            throw new CloudFormationException(
-                    "AWS::SQS::Queue QueueName must contain only letters, numbers, hyphens, or underscores and be"
-                            + " at most " + MAX_QUEUE_NAME_LENGTH + " characters");
-        }
     }
 
     @Override
@@ -115,6 +84,38 @@ public final class SqsQueueResourceHandler implements CloudFormationResourceHand
         if (!store.deleteQueue(resource.physicalId())) {
             throw new CloudFormationException(
                     "Could not delete local SQS queue '" + resource.physicalId() + "' during rollback");
+        }
+    }
+
+    private static void validateSupportedProperties(JsonNode properties) {
+        Iterator<String> fields = properties.fieldNames();
+        while (fields.hasNext()) {
+            String field = fields.next();
+            if (!"QueueName".equals(field)) {
+                throw new CloudFormationException("AWS::SQS::Queue property '" + field
+                        + "' is not supported locally yet; remove it or wait for the SQS property slice");
+            }
+        }
+    }
+
+    private static void validateQueueName(JsonNode name) {
+        if (name.isMissingNode() || name.isObject()) {
+            return;
+        }
+        if (!name.isTextual()) {
+            throw new CloudFormationException("AWS::SQS::Queue QueueName must resolve to a string");
+        }
+        validateQueueNameText(name.textValue());
+    }
+
+    private static void validateQueueNameText(String name) {
+        if (name.isBlank()) {
+            throw new CloudFormationException("AWS::SQS::Queue QueueName must resolve to a non-blank string");
+        }
+        if (!QUEUE_NAME.matcher(name).matches()) {
+            throw new CloudFormationException(
+                    "AWS::SQS::Queue QueueName must contain only letters, numbers, hyphens, or underscores and be"
+                            + " at most " + MAX_QUEUE_NAME_LENGTH + " characters");
         }
     }
 

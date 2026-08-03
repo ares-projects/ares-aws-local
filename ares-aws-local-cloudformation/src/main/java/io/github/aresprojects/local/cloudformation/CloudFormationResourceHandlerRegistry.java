@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Immutable registry of CloudFormation resource handlers. */
 public final class CloudFormationResourceHandlerRegistry {
@@ -18,8 +19,8 @@ public final class CloudFormationResourceHandlerRegistry {
     }
 
     /** Returns the handler for a type, or empty when the type is not implemented locally. */
-    public java.util.Optional<CloudFormationResourceHandler> find(String resourceType) {
-        return java.util.Optional.ofNullable(handlers.get(resourceType));
+    public Optional<CloudFormationResourceHandler> find(String resourceType) {
+        return Optional.ofNullable(handlers.get(resourceType));
     }
 
     public List<String> resourceTypes() {

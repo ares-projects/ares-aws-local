@@ -2,6 +2,7 @@ package io.github.aresprojects.local.runtime.cloudformation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.github.aresprojects.local.cloudformation.CloudAssembly;
 import io.github.aresprojects.local.cloudformation.CloudAssemblyArtifact;
 import io.github.aresprojects.local.cloudformation.CloudAssemblyReader;
@@ -23,12 +24,15 @@ import io.github.aresprojects.local.cloudformation.StackStateStore;
 import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import io.github.aresprojects.local.runtime.service.sqs.SqsQueueStore;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +43,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -94,7 +99,7 @@ public final class LocalCloudFormationController {
                     "000000000000",
                     "us-east-1",
                     endpoint,
-                    java.time.Clock.systemUTC(),
+                    Clock.systemUTC(),
                     parameters,
                     identifier -> Optional.empty());
             StackState current = stateStore.find(artifact.stackName()).orElse(null);
@@ -161,7 +166,7 @@ public final class LocalCloudFormationController {
     }
 
     private static void extractBundle(byte[] bytes, Path directory) throws IOException {
-        try (InputStream input = new java.io.ByteArrayInputStream(bytes);
+        try (InputStream input = new ByteArrayInputStream(bytes);
                 ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
@@ -235,7 +240,7 @@ public final class LocalCloudFormationController {
             }
             JsonNode allowed = definition.path("AllowedValues");
             if (allowed.isArray()
-                    && java.util.stream.StreamSupport.stream(allowed.spliterator(), false)
+                    && StreamSupport.stream(allowed.spliterator(), false)
                             .map(JsonNode::asText)
                             .noneMatch(value::equals)) {
                 throw new IllegalArgumentException("CloudFormation parameter '" + name + "' must be one of " + allowed
@@ -257,7 +262,7 @@ public final class LocalCloudFormationController {
         try {
             if (root != null && Files.exists(root)) {
                 try (var paths = Files.walk(root)) {
-                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                    paths.sorted(Comparator.reverseOrder()).forEach(path -> {
                         try {
                             Files.deleteIfExists(path);
                         } catch (IOException ignored) {
@@ -305,7 +310,7 @@ public final class LocalCloudFormationController {
         }
     }
 
-    private static void diagnostic(com.fasterxml.jackson.databind.node.ArrayNode array, DeploymentDiagnostic item) {
+    private static void diagnostic(ArrayNode array, DeploymentDiagnostic item) {
         var diagnostic = array.addObject();
         diagnostic.put("logicalId", item.logicalId());
         diagnostic.put("action", item.action().name());

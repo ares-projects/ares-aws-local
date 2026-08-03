@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /** Immutable CloudFormation template model retaining resource declaration order. */
 public final class CloudFormationTemplate {
@@ -56,7 +57,7 @@ public final class CloudFormationTemplate {
     private static Map<String, JsonNode> copy(Map<String, JsonNode> values) {
         Objects.requireNonNull(values, "values");
         return values.entrySet().stream()
-                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey, entry -> entry.getValue().deepCopy()));
     }
 }

@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Builds deterministic CloudFormation resource plans without mutating service state. */
 public final class StackPlanner {
@@ -365,8 +367,7 @@ public final class StackPlanner {
         JsonNode sub = node.path("Fn::Sub");
         String value = sub.isTextual() ? sub.textValue() : sub.path(0).asText("");
         Set<String> suppliedVariables = suppliedVariables(sub);
-        java.util.regex.Matcher matcher =
-                java.util.regex.Pattern.compile("\\$\\{([^}.]+)(?:\\.[^}]+)?}").matcher(value);
+        Matcher matcher = Pattern.compile("\\$\\{([^}.]+)(?:\\.[^}]+)?}").matcher(value);
         while (matcher.find()) {
             addSubReference(matcher.group(1), suppliedVariables, references);
         }
