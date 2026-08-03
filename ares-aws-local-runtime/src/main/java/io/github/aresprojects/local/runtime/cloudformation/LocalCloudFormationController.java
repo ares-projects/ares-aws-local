@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.github.aresprojects.local.cloudformation.CloudAssembly;
 import io.github.aresprojects.local.cloudformation.CloudAssemblyArtifact;
+import io.github.aresprojects.local.cloudformation.CloudAssemblyAssetResolver;
 import io.github.aresprojects.local.cloudformation.CloudAssemblyReader;
 import io.github.aresprojects.local.cloudformation.CloudFormationResourceHandlerRegistry;
 import io.github.aresprojects.local.cloudformation.CloudFormationTemplate;
@@ -21,6 +22,7 @@ import io.github.aresprojects.local.cloudformation.StackPlanner;
 import io.github.aresprojects.local.cloudformation.StackProvisioner;
 import io.github.aresprojects.local.cloudformation.StackState;
 import io.github.aresprojects.local.cloudformation.StackStateStore;
+import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import io.github.aresprojects.local.runtime.service.sqs.SqsQueueStore;
@@ -37,7 +39,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,11 +60,12 @@ public final class LocalCloudFormationController {
     private final ConcurrentMap<String, ReentrantLock> stackLocks = new ConcurrentHashMap<>();
 
     public LocalCloudFormationController(SqsQueueStore queueStore) {
-        this(
-                CloudFormationResourceHandlerRegistry.builder()
-                        .register(new SqsQueueResourceHandler(queueStore))
-                        .build(),
-                new InMemoryStackStateStore());
+        this(queueStore, null);
+    }
+
+    /** Creates a controller with SQS and the shared Lambda service resource handlers. */
+    public LocalCloudFormationController(SqsQueueStore queueStore, LambdaService lambdaService) {
+        this(handlers(queueStore, lambdaService), new InMemoryStackStateStore());
     }
 
     LocalCloudFormationController(CloudFormationResourceHandlerRegistry handlers, StackStateStore stateStore) {
@@ -101,7 +103,7 @@ public final class LocalCloudFormationController {
                     endpoint,
                     Clock.systemUTC(),
                     parameters,
-                    identifier -> Optional.empty());
+                    new CloudAssemblyAssetResolver(bundle.assemblyRoot()));
             StackState current = stateStore.find(artifact.stackName()).orElse(null);
             Map<String, ProvisionedResource> existing = current == null ? Map.of() : current.resources();
             StackPlan plan = new StackPlanner(handlers).plan(template, context, existing);
@@ -336,4 +338,14 @@ public final class LocalCloudFormationController {
     }
 
     private record Bundle(Path assemblyRoot, String stackArtifactId, Map<String, String> parameters) {}
+
+    private static CloudFormationResourceHandlerRegistry handlers(
+            SqsQueueStore queueStore, LambdaService lambdaService) {
+        var builder = CloudFormationResourceHandlerRegistry.builder()
+                .register(new SqsQueueResourceHandler(Objects.requireNonNull(queueStore, "queueStore")));
+        if (lambdaService != null) {
+            builder.register(new LambdaFunctionResourceHandler(lambdaService));
+        }
+        return builder.build();
+    }
 }

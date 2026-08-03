@@ -1,0 +1,114 @@
+{
+ "Resources": {
+  "Queue4A7E3555": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "QueueName": "ares-cdk-sqs-lambda"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "CdkSqsLambdaStack/Queue/Resource"
+   }
+  },
+  "Function76856677": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "arm64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-000000000000-us-east-1",
+     "S3Key": "e6c351640f03def7dfa8aebbcdf2a3acb156811a24eb7e9c2f6b8afd6e55ebbd.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "GREETING": "Ares"
+     }
+    },
+    "Handler": "example.HelloHandler",
+    "MemorySize": 256,
+    "Role": "arn:aws:iam::000000000000:role/lambda-local",
+    "Runtime": "java21",
+    "Timeout": 10
+   },
+   "Metadata": {
+    "aws:cdk:path": "CdkSqsLambdaStack/Function/Resource",
+    "aws:asset:path": "asset.e6c351640f03def7dfa8aebbcdf2a3acb156811a24eb7e9c2f6b8afd6e55ebbd.zip",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zWMyw6CMBAAv8V7WaVNvIuJVyN8AFnKSsqjKLuVQ9N/N2A8zSSTjAZ9NnA64MqZbYdsdA3EStAOCleuI78Z4iNQIHV9+l2SGnFqWoR4C96Km/2W/p4UmxqZSRguGxQbKIIdSApkSqoknsNiSe21Euyc77bDPcgrSFJ+bgl6Pn60htxAfujZuWwJXtxEUP74BcXyDFa4AAAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CdkSqsLambdaStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "QueueUrl": {
+   "Value": {
+    "Ref": "Queue4A7E3555"
+   }
+  },
+  "QueueArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "Queue4A7E3555",
+     "Arn"
+    ]
+   }
+  },
+  "FunctionName": {
+   "Value": {
+    "Ref": "Function76856677"
+   }
+  },
+  "FunctionArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "Function76856677",
+     "Arn"
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

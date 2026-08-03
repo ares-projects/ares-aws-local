@@ -27,10 +27,11 @@ Add a transport-neutral CloudFormation module with immutable assembly and templa
 intrinsic resolution, dependency planning, resource-handler contracts, and process-local
 stack state. The runtime owns execution and registers service-specific handlers.
 
-The first resource handler provisions `AWS::SQS::Queue`. Unsupported resources are reported
-and skipped; dependent resources are blocked. A partial result has a non-zero CLI exit code.
-Supported resources created during a failed attempt are rolled back in reverse dependency
-order.
+The first resource handlers provision `AWS::SQS::Queue` and Java 21 `AWS::Lambda::Function`.
+Lambda code is resolved from the file assets copied into the deployment bundle; Ares does not
+contact S3. Unsupported resources are reported and skipped; dependent resources are blocked.
+A partial result has a non-zero CLI exit code. Supported resources created during a failed
+attempt are rolled back in reverse dependency order.
 
 `ares deploy` keeps the existing `ares.yaml` Lambda workflow and detects a `cdk.out` assembly
 when the supplied path contains `manifest.json` or `cdk.out/manifest.json`. Multi-stack
@@ -49,6 +50,8 @@ and full update/delete semantics remain future work.
 - Stack state remains process-local and is shared with the existing service stores.
 - The CloudFormation API is not emulated yet; the Ares control endpoint is the first transport.
 - Resource support grows by registering handlers without changing the parser or scheduler.
+- CDK-generated Lambda assets are staged through the existing Lambda artifact store and use the
+  existing runtime-neutral execution backend.
 - Unsupported behavior is visible and never silently treated as provisioned.
 
 ## References

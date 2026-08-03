@@ -1,0 +1,136 @@
+{
+  "/CdkSqsLambdaStack": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/QueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "QueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:40:5)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/QueueArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "QueueArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:41:5)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/FunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FunctionName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:42:5)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/FunctionArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FunctionArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:43:5)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/Queue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Queue4A7E3555"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:12:19)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/Function/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Function76856677"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Function2 in aws-cdk-lib...",
+        "new CdkSqsLambdaStack (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/lib/cdk-sqs-lambda-stack.ts:27:21)",
+        "<anonymous> (/Users/andreyfranca/workspace/ares-projects/ares-aws-local/examples/cdk-sqs-lambda/bin/cdk-sqs-lambda.ts:7:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/CdkSqsLambdaStack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}
