@@ -65,7 +65,7 @@ public final class LocalAwsRuntime {
                 .registerPollingDriver(new SqsLambdaPollingDriver(queueStore, lambdaService))
                 .build();
         return new LocalAwsRuntimeApplication(
-                new LocalAwsServer(config, services, new LocalCloudFormationController(queueStore)),
+                new LocalAwsServer(config, services, new LocalCloudFormationController(queueStore, lambdaService)),
                 new TriggerEngine(triggers));
     }
 

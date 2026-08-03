@@ -1,0 +1,8 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/cdk-sqs-lambda.ts",
+  "output": "cdk.out",
+  "context": {
+    "@aws-cdk/core:enablePathMetadata": false,
+    "@aws-cdk/core:stackRelativeExports": true
+  }
+}

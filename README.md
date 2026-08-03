@@ -87,7 +87,21 @@ ares deploy ./cdk.out --stack MyStack --parameter Environment=local
 ```
 
 Use `--dry-run` to print the dependency plan without creating resources. The initial
-CloudFormation slice provisions `AWS::SQS::Queue`; unsupported resources are reported and
-skipped, dependent resources are blocked, and a partial deployment returns exit code `8`.
-Cloud Assembly state is process-local. Lambda assets, additional resource handlers, nested
-stacks, and CloudFormation-compatible stack APIs are future slices.
+CloudFormation slice provisions `AWS::SQS::Queue` and Java 21 `AWS::Lambda::Function` resources
+from bundled file assets. Unsupported resources are reported and skipped, dependent resources
+are blocked, and a partial deployment returns exit code `8`. Cloud Assembly state is process-local.
+
+The repository includes a real TypeScript CDK application. Build its Java Lambda asset and
+synthesize the assembly with:
+
+```bash
+cd examples/cdk-sqs-lambda
+npm ci
+npm run synth
+cd ../..
+ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
+  ./ares-aws-local-cli/build/install/ares/bin/ares deploy ./examples/cdk-sqs-lambda
+```
+
+The generated `cdk.out` is the input Ares parses. Lambda-to-SQS event source mappings, additional
+resource handlers, nested stacks, and CloudFormation-compatible stack APIs are future slices.

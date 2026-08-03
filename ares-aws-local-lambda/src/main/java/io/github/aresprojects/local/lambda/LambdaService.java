@@ -110,6 +110,11 @@ public final class LambdaService implements AutoCloseable, LambdaInvoker {
         return functionStore.find(requiredName).orElseThrow(() -> notFound(requiredName));
     }
 
+    /** Returns a function snapshot when the name exists without converting absence into an exception. */
+    public Optional<LambdaFunctionSnapshot> find(String functionName) {
+        return functionStore.find(required(functionName, "functionName"));
+    }
+
     /** Invokes the active revision through the configured runtime-neutral execution backend. */
     @Override
     public CompletionStage<LambdaInvocationResult> invoke(String functionName, byte[] payload) {

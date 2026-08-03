@@ -59,6 +59,20 @@ class CloudFormationContractsTest {
     }
 
     @Test
+    void resourcePlanAndStackPlanReportOptionalStateAndPartialActions() {
+        TemplateResource resource = new TemplateResource(
+                "Queue", "AWS::SQS::Queue", mapper.createObjectNode(), mapper.createObjectNode(), List.of(), null, 0);
+        ResourcePlan create = ResourcePlan.withHandler(
+                resource, ResourceAction.CREATE, resource.properties(), List.of(), "new", null, null);
+        ResourcePlan partial = ResourcePlan.withHandler(
+                resource, ResourceAction.BLOCKED, resource.properties(), List.of(), "blocked", null, null);
+
+        assertTrue(create.existingOptional().isEmpty());
+        assertFalse(new StackPlan("Stack", List.of(create), List.of()).partial());
+        assertTrue(new StackPlan("Stack", List.of(partial), List.of()).partial());
+    }
+
+    @Test
     void handlerRegistryRejectsDuplicateAndInvalidTypes() {
         FakeHandler handler = new FakeHandler("Test::Queue", false, new AtomicInteger());
         assertThrows(
