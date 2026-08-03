@@ -1,0 +1,12 @@
+{
+  "version": "36.0.0",
+  "artifacts": {
+    "CdkSqsStack": {
+      "type": "aws:cloudformation:stack",
+      "properties": {
+        "templateFile": "CdkSqsStack.template.json",
+        "stackName": "CdkSqsStack"
+      }
+    }
+  }
+}

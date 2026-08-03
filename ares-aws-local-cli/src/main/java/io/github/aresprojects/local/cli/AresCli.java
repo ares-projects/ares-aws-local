@@ -4,6 +4,8 @@ import io.github.aresprojects.local.cli.builder.AresBuildService;
 import io.github.aresprojects.local.cli.builder.DeploymentResult;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService;
 import io.github.aresprojects.local.cli.deploy.AresDeploymentService.DeploymentOutcome;
+import io.github.aresprojects.local.cli.deploy.CloudAssemblyDeploymentOptions;
+import io.github.aresprojects.local.cli.deploy.CloudAssemblyDeploymentService;
 import io.github.aresprojects.local.cli.deploy.LambdaClientException;
 import io.github.aresprojects.local.cli.deploy.LocalLambdaClient;
 import io.github.aresprojects.local.runtime.LocalAwsRuntime;
@@ -23,6 +25,7 @@ import java.util.function.Consumer;
 public final class AresCli {
     private static final String USAGE =
             "Usage: ares local start | ares build <function-path> | ares deploy <function-path>"
+                    + " [--stack <id>] [--parameter Key=Value] [--dry-run]"
                     + " | ares invoke <function-name> [--event <path> | --payload <json>]";
 
     private final Consumer<String> output;
@@ -96,8 +99,8 @@ public final class AresCli {
         if (args.size() == 2 && "build".equals(args.get(0))) {
             return build(args.get(1));
         }
-        if (args.size() == 2 && "deploy".equals(args.get(0))) {
-            return deploy(args.get(1));
+        if (args.size() >= 2 && "deploy".equals(args.get(0))) {
+            return deploy(args);
         }
         if (args.size() >= 2 && "invoke".equals(args.get(0))) {
             return invoke(args);
@@ -125,7 +128,6 @@ public final class AresCli {
             error.accept("Invalid function path '" + requestedPath + "'; provide a valid project directory");
             return AresExitCode.USAGE_ERROR.value();
         }
-
         try {
             DeploymentResult result = buildService.build(projectPath);
             output.accept("Built Lambda function '" + result.functionName() + "'");
@@ -141,15 +143,63 @@ public final class AresCli {
         }
     }
 
-    private int deploy(String requestedPath) {
+    private int deploy(List<String> arguments) {
+        String requestedPath = arguments.get(1);
         Path projectPath;
+        Path assemblyRoot;
         try {
             projectPath = Path.of(requestedPath);
         } catch (InvalidPathException exception) {
             error.accept("Invalid function path '" + requestedPath + "'; provide a valid project directory");
             return AresExitCode.USAGE_ERROR.value();
         }
+        try {
+            assemblyRoot = assemblyRoot(projectPath);
+        } catch (IllegalArgumentException exception) {
+            error.accept(exception.getMessage());
+            return AresExitCode.USAGE_ERROR.value();
+        }
+        if (assemblyRoot != null) {
+            return deployCloudAssembly(arguments, assemblyRoot);
+        }
+        if (arguments.size() != 2) {
+            error.accept("Lambda project deployment does not accept Cloud Assembly options; " + USAGE);
+            return AresExitCode.USAGE_ERROR.value();
+        }
+        return deployLambdaProject(projectPath);
+    }
 
+    private int deployCloudAssembly(List<String> arguments, Path assemblyRoot) {
+        try {
+            CloudAssemblyDeploymentOptions options = CloudAssemblyDeploymentOptions.parse(arguments);
+            CloudAssemblyDeploymentService.DeploymentOutcome outcome = new CloudAssemblyDeploymentService()
+                    .deploy(assemblyRoot, options.stack(), options.parameters(), options.dryRun(), options.endpoint());
+            output.accept(outcome.summary());
+            if (outcome.body().has("outputs")) {
+                output.accept(outcome.body().path("outputs").toPrettyString());
+            }
+            if ("PARTIAL".equals(outcome.status())) {
+                error.accept(outcome.body().path("diagnostics").toPrettyString());
+                return AresExitCode.PARTIAL_DEPLOYMENT.value();
+            }
+            if ("ROLLBACK_COMPLETE".equals(outcome.status()) || "ROLLBACK_FAILED".equals(outcome.status())) {
+                error.accept(outcome.body().path("diagnostics").toPrettyString());
+                return AresExitCode.DEPLOYMENT_FAILED.value();
+            }
+            return AresExitCode.SUCCESS.value();
+        } catch (AresConfigurationException exception) {
+            error.accept(exception.getMessage());
+            return AresExitCode.USAGE_ERROR.value();
+        } catch (IllegalArgumentException exception) {
+            error.accept("Invalid Cloud Assembly deployment options: " + exception.getMessage());
+            return AresExitCode.USAGE_ERROR.value();
+        } catch (AresDeploymentException exception) {
+            error.accept(exception.getMessage());
+            return AresExitCode.DEPLOYMENT_FAILED.value();
+        }
+    }
+
+    private int deployLambdaProject(Path projectPath) {
         try {
             DeploymentOutcome outcome = deploymentService.deploy(projectPath);
             output.accept(outcome.summary());
@@ -166,6 +216,18 @@ public final class AresCli {
             error.accept(exception.getMessage());
             return AresExitCode.DEPLOYMENT_FAILED.value();
         }
+    }
+
+    private static Path assemblyRoot(Path requested) {
+        Path path = requested.toAbsolutePath().normalize();
+        boolean descriptor = Files.isRegularFile(path.resolve("ares.yaml"));
+        Path direct = Files.isRegularFile(path.resolve("manifest.json")) ? path : null;
+        Path nested = Files.isRegularFile(path.resolve("cdk.out/manifest.json")) ? path.resolve("cdk.out") : null;
+        if (descriptor && (direct != null || nested != null)) {
+            throw new IllegalArgumentException("Path '" + requested
+                    + "' contains both ares.yaml and a Cloud Assembly; pass one deployment target explicitly");
+        }
+        return direct != null ? direct : nested;
     }
 
     private int invoke(List<String> arguments) {

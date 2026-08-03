@@ -2,6 +2,7 @@ package io.github.aresprojects.local.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -237,6 +238,105 @@ class AresCliTest {
     }
 
     @Test
+    void deploysCloudAssemblyUsingAutoDetectionAndOptions(@TempDir Path directory) throws Exception {
+        Path assembly = directory.resolve("cdk.out");
+        Files.createDirectories(assembly);
+        writeCloudAssembly(assembly);
+        List<String> output = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/_ares/cloudformation/plan", exchange -> {
+            assertEquals("application/zip", exchange.getRequestHeaders().getFirst("content-type"));
+            assertTrue(exchange.getRequestBody().readAllBytes().length > 0);
+            byte[] response = "{\"status\":\"PLANNED\",\"outputs\":{}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            try (OutputStream stream = exchange.getResponseBody()) {
+                stream.write(response);
+            }
+        });
+        server.start();
+        try {
+            AresCli cli = new AresCli(output::add, errors::add, new AresBuildService());
+
+            int exitCode = cli.execute(
+                    "deploy",
+                    directory.toString(),
+                    "--stack",
+                    "Stack",
+                    "--parameter",
+                    "Environment=test",
+                    "--dry-run",
+                    "--endpoint",
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/");
+
+            assertEquals(AresExitCode.SUCCESS.value(), exitCode);
+            assertEquals(2, output.size());
+            assertTrue(output.getFirst().contains("PLANNED"));
+            assertTrue(errors.isEmpty());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void rejectsCloudAssemblyAndLambdaOptionMixing(@TempDir Path directory) throws Exception {
+        Path assembly = directory.resolve("cdk.out");
+        Files.createDirectories(assembly);
+        writeCloudAssembly(assembly);
+        Files.writeString(directory.resolve("ares.yaml"), "schemaVersion: 1\n");
+        List<String> errors = new ArrayList<>();
+        AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService());
+
+        assertEquals(AresExitCode.USAGE_ERROR.value(), cli.execute("deploy", directory.toString()));
+        assertTrue(errors.getFirst().contains("both ares.yaml"));
+        assertEquals(AresExitCode.USAGE_ERROR.value(), cli.execute("deploy", directory.toString(), "--stack"));
+        assertTrue(errors.get(1).contains("both ares.yaml"));
+    }
+
+    @Test
+    void mapsCloudAssemblyPartialRollbackAndOptionFailures(@TempDir Path directory) throws Exception {
+        Path assembly = directory.resolve("cdk.out");
+        Files.createDirectories(assembly);
+        writeCloudAssembly(assembly);
+        List<String> errors = new ArrayList<>();
+        List<String> output = new ArrayList<>();
+        java.util.concurrent.atomic.AtomicReference<String> status =
+                new java.util.concurrent.atomic.AtomicReference<>("PARTIAL");
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/_ares/cloudformation/deploy", exchange -> {
+            byte[] response =
+                    ("{\"status\":\"" + status.get() + "\",\"diagnostics\":[]}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            try (OutputStream stream = exchange.getResponseBody()) {
+                stream.write(response);
+            }
+        });
+        server.start();
+        String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+        try {
+            AresCli cli = new AresCli(output::add, errors::add, new AresBuildService());
+            assertEquals(8, cli.execute("deploy", directory.toString(), "--endpoint", endpoint));
+            status.set("ROLLBACK_COMPLETE");
+            assertEquals(5, cli.execute("deploy", directory.toString(), "--endpoint", endpoint));
+            assertEquals(2, cli.execute("deploy", directory.toString(), "--unknown"));
+            assertEquals(2, cli.execute("deploy", directory.toString(), "--parameter", "invalid"));
+            assertEquals(2, cli.execute("deploy", directory.toString(), "--stack", "Missing"));
+            assertTrue(errors.size() >= 5);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void rejectsAssemblyOptionsForLambdaProjects(@TempDir Path directory) {
+        List<String> errors = new ArrayList<>();
+        AresCli cli = new AresCli(message -> {}, errors::add, new AresBuildService());
+
+        assertEquals(2, cli.execute("deploy", directory.toString(), "--stack", "Stack"));
+        assertTrue(errors.getFirst().contains("does not accept Cloud Assembly options"));
+    }
+
+    @Test
     void mapsRemoteAndUnexpectedInvocationFailures() throws Exception {
         List<String> errors = new ArrayList<>();
         LocalLambdaClient remoteFailure = mock(LocalLambdaClient.class);
@@ -279,5 +379,15 @@ class AresCliTest {
         } else {
             Files.writeString(directory.resolve("build/function.zip"), "not a zip");
         }
+    }
+
+    private static void writeCloudAssembly(Path directory) throws Exception {
+        Files.writeString(directory.resolve("manifest.json"), """
+                {"version":"36.0.0","artifacts":{"Stack":{"type":"aws:cloudformation:stack",
+                "properties":{"templateFile":"template.json","stackName":"Stack"}}}}
+                """);
+        Files.writeString(directory.resolve("template.json"), """
+                {"Resources":{"Queue":{"Type":"AWS::SQS::Queue"}}}
+                """);
     }
 }

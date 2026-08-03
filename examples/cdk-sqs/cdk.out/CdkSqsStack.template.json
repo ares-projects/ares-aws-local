@@ -1,0 +1,34 @@
+{
+  "Resources": {
+    "Queue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": "ares-cdk-sample"
+      }
+    },
+    "Metadata": {
+      "Type": "AWS::CDK::Metadata",
+      "Properties": {
+        "Analytics": "local-fixture"
+      }
+    },
+    "UnsupportedBucket": {
+      "Type": "AWS::S3::Bucket"
+    }
+  },
+  "Outputs": {
+    "QueueUrl": {
+      "Value": {
+        "Ref": "Queue"
+      }
+    },
+    "QueueArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Queue",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

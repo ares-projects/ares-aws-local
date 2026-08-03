@@ -24,7 +24,10 @@ public enum AresExitCode {
     FUNCTION_ERROR(6),
 
     /** Required local infrastructure, such as Docker or the runtime endpoint, is unavailable. */
-    INFRASTRUCTURE_UNAVAILABLE(7);
+    INFRASTRUCTURE_UNAVAILABLE(7),
+
+    /** The stack was applied with unsupported or blocked resources. */
+    PARTIAL_DEPLOYMENT(8);
 
     private final int value;
 

@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(project(":ares-aws-local-runtime"))
+    implementation(project(":ares-aws-local-cloudformation"))
     implementation(project(":ares-aws-local-spi"))
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.3")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3")
