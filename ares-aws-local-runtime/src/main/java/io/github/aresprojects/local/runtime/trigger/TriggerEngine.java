@@ -32,6 +32,7 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
     private final TriggerDiagnosticsObserver diagnostics;
     private final Duration idlePollInterval;
     private final Duration shutdownTimeout;
+    private final ConcurrentHashMap<String, TriggerMapping> activeMappings = new ConcurrentHashMap<>();
     private final Set<CompletableFuture<?>> inFlight = ConcurrentHashMap.newKeySet();
     private State state = State.NEW;
 
@@ -76,6 +77,7 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.idlePollInterval = requireNonNegative(idlePollInterval, "idlePollInterval");
         this.shutdownTimeout = requirePositive(shutdownTimeout, "shutdownTimeout");
+        registry.mappings().forEach(mapping -> activeMappings.put(mapping.id(), mapping));
     }
 
     /** Starts one non-overlapping polling lane for every configured concurrency slot. */
@@ -85,7 +87,7 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
                     "Cannot start trigger engine from state " + state + "; create a new TriggerEngine instance");
         }
         state = State.RUNNING;
-        for (TriggerMapping mapping : registry.mappings()) {
+        for (TriggerMapping mapping : activeMappings.values()) {
             PollingTriggerDriver driver = registry.pollingDriver(mapping.driverId());
             if (mapping.enabled() && driver != null) {
                 PollingTriggerSettings settings = (PollingTriggerSettings) mapping.settings();
@@ -106,6 +108,57 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
         return state == State.RUNNING;
     }
 
+    /**
+     * Registers a runtime-created mapping and starts its polling lanes immediately when enabled.
+     *
+     * @param mapping validated mapping to add
+     * @throws IllegalStateException when the engine is not running
+     * @throws IllegalArgumentException when the mapping or its driver is invalid
+     */
+    public synchronized void registerMapping(TriggerMapping mapping) {
+        if (state != State.RUNNING) {
+            throw new IllegalStateException(
+                    "Cannot register trigger mappings while engine is in state " + state + "; start the engine first");
+        }
+        TriggerMapping candidate = Objects.requireNonNull(mapping, "mapping");
+        registry.validateMapping(candidate);
+        if (activeMappings.putIfAbsent(candidate.id(), candidate) != null) {
+            throw new IllegalArgumentException(
+                    "Trigger mapping id '" + candidate.id() + "' is already registered; use a unique mapping id");
+        }
+        PollingTriggerDriver driver = registry.pollingDriver(candidate.driverId());
+        if (candidate.enabled() && driver != null) {
+            PollingTriggerSettings settings = (PollingTriggerSettings) candidate.settings();
+            for (int lane = 0; lane < settings.maximumConcurrency(); lane++) {
+                schedulePoll(candidate, driver, Duration.ZERO);
+            }
+        }
+    }
+
+    /**
+     * Removes a runtime-created mapping so no future polling lanes are scheduled.
+     *
+     * @param mappingId stable mapping identifier
+     * @return the removed mapping, or empty when it was already absent
+     */
+    public synchronized Optional<TriggerMapping> removeMapping(String mappingId) {
+        Objects.requireNonNull(mappingId, "mappingId");
+        if (state == State.CLOSED) {
+            throw new IllegalStateException("Cannot remove trigger mappings after the engine has closed");
+        }
+        return Optional.ofNullable(activeMappings.remove(mappingId));
+    }
+
+    /**
+     * Finds an active mapping by its stable identifier.
+     *
+     * @param mappingId stable mapping identifier
+     * @return the mapping when registered
+     */
+    public Optional<TriggerMapping> findMapping(String mappingId) {
+        return Optional.ofNullable(activeMappings.get(Objects.requireNonNull(mappingId, "mappingId")));
+    }
+
     @Override
     public CompletionStage<Void> publish(IntegrationEvent event) {
         IntegrationEvent published = Objects.requireNonNull(event, "event");
@@ -116,7 +169,7 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
             }
         }
         List<CompletableFuture<Void>> deliveries = new ArrayList<>();
-        for (TriggerMapping mapping : registry.mappings()) {
+        for (TriggerMapping mapping : activeMappings.values()) {
             PushTriggerDriver driver = registry.pushDriver(mapping.driverId());
             if (mapping.enabled() && driver != null && mapping.source().equals(published.source())) {
                 deliveries.add(submitPush(mapping, driver, published));
@@ -144,13 +197,16 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
     }
 
     private synchronized void schedulePoll(TriggerMapping mapping, PollingTriggerDriver driver, Duration delay) {
-        if (state != State.RUNNING) {
+        if (state != State.RUNNING || !isActive(mapping)) {
             return;
         }
         scheduler.schedule(() -> submitPoll(mapping, driver), delay.toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void submitPoll(TriggerMapping mapping, PollingTriggerDriver driver) {
+        if (!isActive(mapping)) {
+            return;
+        }
         CompletableFuture<Void> operation = registerOperation();
         if (operation == null) {
             return;
@@ -160,6 +216,10 @@ public final class TriggerEngine implements AutoCloseable, IntegrationEventPubli
         } catch (RuntimeException exception) {
             finishPoll(mapping, driver, operation, null, exception);
         }
+    }
+
+    private boolean isActive(TriggerMapping mapping) {
+        return activeMappings.get(mapping.id()) == mapping;
     }
 
     private void invokePoll(TriggerMapping mapping, PollingTriggerDriver driver, CompletableFuture<Void> operation) {

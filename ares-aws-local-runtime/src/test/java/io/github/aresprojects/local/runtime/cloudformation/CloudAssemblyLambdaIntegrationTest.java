@@ -6,12 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aresprojects.local.lambda.InMemoryLambdaFunctionStore;
+import io.github.aresprojects.local.lambda.LambdaExecutionBackend;
+import io.github.aresprojects.local.lambda.LambdaFunctionSnapshot;
 import io.github.aresprojects.local.lambda.LambdaService;
-import io.github.aresprojects.local.lambda.NoOpLambdaExecutionBackend;
 import io.github.aresprojects.local.lambda.TemporaryLambdaArtifactStore;
 import io.github.aresprojects.local.runtime.http.AwsHttpResponse;
 import io.github.aresprojects.local.runtime.http.AwsRequestContext;
 import io.github.aresprojects.local.runtime.service.sqs.InMemorySqsQueueStore;
+import io.github.aresprojects.local.runtime.trigger.TriggerEngine;
+import io.github.aresprojects.local.runtime.trigger.TriggerRegistry;
+import io.github.aresprojects.local.runtime.trigger.lambda.LambdaInvocationResult;
+import io.github.aresprojects.local.runtime.trigger.sqs.SqsLambdaPollingDriver;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +27,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
@@ -36,24 +45,53 @@ class CloudAssemblyLambdaIntegrationTest {
         assertTrue(Files.isRegularFile(assembly.resolve("manifest.json")), "run npm run synth for the CDK fixture");
 
         InMemorySqsQueueStore queueStore = new InMemorySqsQueueStore();
+        CountDownLatch invoked = new CountDownLatch(1);
+        AtomicReference<byte[]> event = new AtomicReference<>();
+        LambdaExecutionBackend backend = new LambdaExecutionBackend() {
+            @Override
+            public CompletionStage<LambdaInvocationResult> invoke(LambdaFunctionSnapshot function, byte[] payload) {
+                event.set(payload);
+                invoked.countDown();
+                return CompletableFuture.completedFuture(
+                        LambdaInvocationResult.success("{}".getBytes(StandardCharsets.UTF_8)));
+            }
+
+            @Override
+            public void invalidate(String functionName, String revisionId) {}
+        };
         try (LambdaService lambdaService = new LambdaService(
                 new InMemoryLambdaFunctionStore(),
                 new TemporaryLambdaArtifactStore(),
-                new NoOpLambdaExecutionBackend(),
+                backend,
                 Clock.fixed(Instant.parse("2026-08-03T00:00:00Z"), ZoneOffset.UTC),
                 "us-east-1")) {
-            LocalCloudFormationController controller = new LocalCloudFormationController(queueStore, lambdaService);
-            AwsHttpResponse response = controller
-                    .handle(request(bundle(assembly)))
-                    .toCompletableFuture()
-                    .get(5, TimeUnit.SECONDS);
+            TriggerEngine triggerEngine = new TriggerEngine(TriggerRegistry.builder()
+                    .registerPollingDriver(new SqsLambdaPollingDriver(queueStore, lambdaService))
+                    .build());
+            try (triggerEngine) {
+                triggerEngine.start();
+                LocalCloudFormationController controller =
+                        new LocalCloudFormationController(queueStore, lambdaService, triggerEngine);
+                AwsHttpResponse response = controller
+                        .handle(request(bundle(assembly)))
+                        .toCompletableFuture()
+                        .get(5, TimeUnit.SECONDS);
 
-            assertEquals(200, response.statusCode());
-            JsonNode body = mapper.readTree(response.body());
-            assertEquals("COMPLETE", body.path("status").asText());
-            String functionName = body.path("outputs").path("FunctionName").asText();
-            assertTrue(lambdaService.find(functionName).isPresent());
-            assertTrue(body.path("outputs").path("QueueUrl").asText().contains("ares-cdk-sqs-lambda"));
+                assertEquals(200, response.statusCode());
+                JsonNode body = mapper.readTree(response.body());
+                assertEquals("COMPLETE", body.path("status").asText(), body.toPrettyString());
+                String functionName = body.path("outputs").path("FunctionName").asText();
+                assertTrue(lambdaService.find(functionName).isPresent());
+                String queueUrl = body.path("outputs").path("QueueUrl").asText();
+                assertTrue(queueUrl.contains("ares-cdk-sqs-lambda"));
+                queueStore.sendMessage(queueUrl, "message from synthesized CDK mapping");
+                assertTrue(invoked.await(2, TimeUnit.SECONDS));
+                JsonNode record = mapper.readTree(event.get()).path("Records").get(0);
+                assertEquals(
+                        "message from synthesized CDK mapping",
+                        record.path("body").asText());
+                assertQueueIsEmpty(queueStore, queueUrl);
+            }
         }
     }
 
@@ -95,6 +133,18 @@ class CloudAssemblyLambdaIntegrationTest {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(body);
         zip.closeEntry();
+    }
+
+    private static void assertQueueIsEmpty(InMemorySqsQueueStore queueStore, String queueUrl)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (queueStore.receiveMessage(queueUrl, 0).isEmpty()) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        assertTrue(queueStore.receiveMessage(queueUrl, 0).isEmpty(), "trigger did not acknowledge the SQS message");
     }
 
     private static Path repositoryRoot() {

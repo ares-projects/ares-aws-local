@@ -52,6 +52,15 @@ public final class InMemorySqsQueueStore implements SqsQueueStore {
     }
 
     @Override
+    public Optional<SqsQueue> findQueueByName(String queueName) {
+        Objects.requireNonNull(queueName, "queueName");
+        return queues.values().stream()
+                .map(QueueState::queue)
+                .filter(queue -> queue.queueName().equals(queueName))
+                .findFirst();
+    }
+
+    @Override
     public boolean deleteQueue(String queueUrl) {
         return queues.remove(Objects.requireNonNull(queueUrl, "queueUrl")) != null;
     }

@@ -35,7 +35,8 @@ reports unsupported resources explicitly.
 - [x] M3: Provision `AWS::SQS::Queue`, expose outputs, support rollback, and preserve Lambda deployment.
 - [x] M4: Add Lambda file-asset resolution and `AWS::Lambda::Function`.
 - [x] M5: Add a real TypeScript CDK example and a checked-in synthesized assembly fixture.
-- [ ] M6: Add event-source mappings and CloudFormation-compatible stack APIs.
+- [x] M6: Add SQS `AWS::Lambda::EventSourceMapping` provisioning through the trigger engine.
+- [ ] M7: Add CloudFormation-compatible stack APIs.
 
 ## Acceptance
 
@@ -46,6 +47,8 @@ reports unsupported resources explicitly.
 - Named and generated SQS queues are locally addressable through the existing SQS JSON API.
 - Java 21 Lambda file assets from a synthesized CDK assembly are staged into the existing local
   Lambda service and expose function name and ARN outputs.
+- SQS event-source mappings from a synthesized CDK assembly register with the running trigger
+  engine and are removed when the stack resource is deleted.
 - Unsupported resources produce diagnostics and exit code `8`.
 - A failed supported creation rolls back resources created by that attempt.
 - Existing Lambda project deployment remains functional.

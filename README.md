@@ -103,5 +103,6 @@ ARES_AWS_LOCAL_ENDPOINT=http://127.0.0.1:4566 \
   ./ares-aws-local-cli/build/install/ares/bin/ares deploy ./examples/cdk-sqs-lambda
 ```
 
-The generated `cdk.out` is the input Ares parses. Lambda-to-SQS event source mappings, additional
-resource handlers, nested stacks, and CloudFormation-compatible stack APIs are future slices.
+The generated `cdk.out` is the input Ares parses. SQS-to-Lambda event-source mappings are
+provisioned through the running trigger engine. Additional resource handlers, nested stacks, and
+CloudFormation-compatible stack APIs are future slices.

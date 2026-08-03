@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as eventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
@@ -36,6 +37,7 @@ export class CdkSqsLambdaStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(10),
       memorySize: 256,
     });
+    handler.addEventSource(new eventSources.SqsEventSource(queue));
 
     new cdk.CfnOutput(this, 'QueueUrl', { value: queue.queueUrl });
     new cdk.CfnOutput(this, 'QueueArn', { value: queue.queueArn });
