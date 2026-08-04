@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -62,6 +63,20 @@ public final class AresCli implements AutoCloseable {
                 Map.of("ARES_AWS_LOCAL_ENDPOINT", ENDPOINT));
     }
 
+    /** Runs the AWS CLI DynamoDB command against the local runtime endpoint. */
+    public ProcessResult awsDynamoDb(List<String> arguments) throws Exception {
+        List<String> command = new ArrayList<>(List.of("aws", "dynamodb"));
+        command.addAll(requireNonNull(arguments, "arguments"));
+        command.addAll(List.of("--endpoint-url", ENDPOINT));
+        return runExternal(
+                command,
+                Map.of(
+                        "AWS_ACCESS_KEY_ID", "accesskey",
+                        "AWS_SECRET_ACCESS_KEY", "secretkey",
+                        "AWS_DEFAULT_REGION", "us-east-1",
+                        "AWS_PAGER", ""));
+    }
+
     /** Returns captured runtime output for failures that need server-side diagnostics. */
     public String diagnostics() throws IOException {
         return Files.exists(runtimeLog) ? Files.readString(runtimeLog) : "";
@@ -93,6 +108,15 @@ public final class AresCli implements AutoCloseable {
 
     private ProcessResult run(List<String> arguments, Map<String, String> environment) throws Exception {
         Process process = process(arguments, environment, null);
+        return collect(process, arguments);
+    }
+
+    private ProcessResult runExternal(List<String> arguments, Map<String, String> environment) throws Exception {
+        Process process = externalProcess(arguments, environment);
+        return collect(process, arguments);
+    }
+
+    private ProcessResult collect(Process process, List<String> arguments) throws Exception {
         String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
         if (!process.waitFor(2, TimeUnit.MINUTES)) {
@@ -100,6 +124,13 @@ public final class AresCli implements AutoCloseable {
             throw new IOException("CLI command did not finish within two minutes: " + arguments);
         }
         return new ProcessResult(process.exitValue(), stdout, stderr);
+    }
+
+    private Process externalProcess(List<String> arguments, Map<String, String> environment) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(arguments);
+        builder.directory(workingDirectory.toFile());
+        builder.environment().putAll(environment);
+        return builder.start();
     }
 
     private Process process(List<String> arguments, Map<String, String> environment, Path outputFile)

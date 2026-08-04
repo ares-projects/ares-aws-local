@@ -7,6 +7,7 @@ dependencies {
     compileOnly("com.google.code.findbugs:jsr305:3.0.2")
     implementation(project(":ares-aws-local-lambda"))
     implementation(project(":ares-aws-local-lambda-docker"))
+    implementation(project(":ares-aws-local-dynamodb"))
     implementation(project(":ares-aws-local-cloudformation"))
     implementation(project(":ares-aws-local-spi"))
     implementation(platform("io.netty:netty-bom:4.2.16.Final"))
@@ -15,6 +16,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation(platform("software.amazon.awssdk:bom:2.46.8"))
+    testImplementation("software.amazon.awssdk:dynamodb")
     testImplementation("software.amazon.awssdk:lambda")
     testImplementation("software.amazon.awssdk:sqs")
 }

@@ -1,5 +1,6 @@
 package io.github.aresprojects.local.runtime;
 
+import io.github.aresprojects.local.dynamodb.DynamoDbJsonAdapter;
 import io.github.aresprojects.local.lambda.LambdaService;
 import io.github.aresprojects.local.lambda.docker.DockerLambdaExecutionBackend;
 import io.github.aresprojects.local.runtime.cloudformation.LocalCloudFormationController;
@@ -59,6 +60,7 @@ public final class LocalAwsRuntime {
         LambdaService lambdaService = new LambdaService(new DockerLambdaExecutionBackend());
         AwsServiceRegistry services = AwsServiceRegistry.builder()
                 .register(new SqsJsonAdapter(queueStore))
+                .register(new DynamoDbJsonAdapter())
                 .register(new LambdaJsonAdapter(lambdaService))
                 .build();
         TriggerRegistry triggers = TriggerRegistry.builder()
@@ -72,6 +74,7 @@ public final class LocalAwsRuntime {
     static AwsServiceRegistry defaultRegistry() {
         return AwsServiceRegistry.builder()
                 .register(new SqsJsonAdapter(new InMemorySqsQueueStore()))
+                .register(new DynamoDbJsonAdapter())
                 .register(new LambdaJsonAdapter(new LambdaService(new DockerLambdaExecutionBackend())))
                 .build();
     }
