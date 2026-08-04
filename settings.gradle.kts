@@ -13,6 +13,7 @@ dependencyResolutionManagement {
 rootProject.name = "ares-aws-local"
 includeBuild("build-logic")
 include("ares-aws-local-spi")
+include("ares-aws-local-dynamodb")
 include("ares-aws-local-cloudformation")
 include("ares-aws-local-lambda")
 include("ares-aws-local-lambda-docker")
