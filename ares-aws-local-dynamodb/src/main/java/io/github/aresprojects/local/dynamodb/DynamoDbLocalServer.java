@@ -10,9 +10,9 @@ import software.amazon.dynamodb.services.local.server.LocalDynamoDBServerHandler
 /** Owns an in-memory DynamoDB Local server used as the DynamoDB service backend. */
 public final class DynamoDbLocalServer implements AutoCloseable {
     private final int port;
-    private final LocalDynamoDBRequestHandler requestHandler;
-    private final LocalDynamoDBServerHandler serverHandler;
-    private final DynamoDBProxyServer proxyServer;
+    private LocalDynamoDBRequestHandler requestHandler;
+    private LocalDynamoDBServerHandler serverHandler;
+    private DynamoDBProxyServer proxyServer;
     private boolean started;
     private boolean closed;
 
@@ -21,7 +21,7 @@ public final class DynamoDbLocalServer implements AutoCloseable {
         this(findAvailablePort());
     }
 
-    /** Creates an in-memory server on the supplied port. */
+    /** Allocates an in-memory server on the supplied port without starting its backend. */
     public DynamoDbLocalServer(int port) {
         if (port < 1 || port > 65_535) {
             throw new IllegalArgumentException("port must be between 1 and 65535; received " + port);
@@ -40,12 +40,18 @@ public final class DynamoDbLocalServer implements AutoCloseable {
         if (started) {
             throw new IllegalStateException("DynamoDB Local is already running at " + endpoint());
         }
+        requestHandler = new LocalDynamoDBRequestHandler(port, true, null, true, false);
+        serverHandler = new LocalDynamoDBServerHandler(requestHandler, "DynamoDB_20120810");
+        proxyServer = new DynamoDBProxyServer(port, serverHandler);
         try {
             proxyServer.start();
             started = true;
             return endpoint();
         } catch (Exception exception) {
             requestHandler.shutdown();
+            requestHandler = null;
+            serverHandler = null;
+            proxyServer = null;
             throw new IllegalStateException(
                     "Could not start the embedded DynamoDB Local backend on port " + port, exception);
         }
@@ -72,9 +78,9 @@ public final class DynamoDbLocalServer implements AutoCloseable {
             } catch (Exception exception) {
                 throw new IllegalStateException("Could not stop the embedded DynamoDB Local backend", exception);
             }
+            serverHandler.close();
+            started = false;
         }
-        serverHandler.close();
-        started = false;
     }
 
     private static int findAvailablePort() {
